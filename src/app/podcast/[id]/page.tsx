@@ -136,7 +136,9 @@ export default function PodcastPage() {
           {/* Audio Player */}
           <AudioPlayer
             podcastId={data.podcast.id}
-            audioSrc={`/api/audio/${data.podcast.filename}`}
+            audioSrc={data.podcast.file_path.startsWith('http')
+              ? data.podcast.file_path
+              : `/api/audio/${data.podcast.filename}`}
             transcript={data.transcript}
             onTimeUpdate={handleTimeUpdate}
             onSeekTo={handleSeekTo}

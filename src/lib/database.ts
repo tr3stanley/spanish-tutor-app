@@ -8,7 +8,7 @@ export async function getDatabase(): Promise<Database> {
   if (db) return db;
 
   db = await open({
-    filename: path.join(process.cwd(), 'podcasts.db'),
+    filename: path.join(process.cwd(), 'data', 'podcasts.db'),
     driver: sqlite3.Database
   });
 
