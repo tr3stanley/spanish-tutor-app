@@ -25,11 +25,11 @@ export default function AudioPlayer({
   onTimeUpdate,
   onExplanationRequest
 }: AudioPlayerProps) {
-  // Safari-compatible audio source with Edge proxy
+  // Safari-compatible audio source with Edge proxy (only for GitHub URLs)
   const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
   const safariAudioSrc = isSafari && audioSrc.includes('github.com')
     ? `/api/audio-proxy-edge?url=${encodeURIComponent(audioSrc)}&t=${Date.now()}`
-    : audioSrc;
+    : audioSrc; // Archive.org and other hosts work directly
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
