@@ -16,11 +16,19 @@ export async function GET(request: NextRequest) {
 
     console.log('Audio proxy: Fetching', audioUrl);
 
+    // Handle range requests for large audio files
+    const range = request.headers.get('range');
+    const fetchHeaders: Record<string, string> = {
+      'User-Agent': 'Spanish Tutor App Audio Proxy',
+    };
+
+    if (range) {
+      fetchHeaders['Range'] = range;
+    }
+
     // Fetch the audio file from GitHub releases
     const response = await fetch(audioUrl, {
-      headers: {
-        'User-Agent': 'Spanish Tutor App Audio Proxy',
-      },
+      headers: fetchHeaders,
     });
 
     if (!response.ok) {
@@ -38,26 +46,38 @@ export async function GET(request: NextRequest) {
       }, { status: response.status });
     }
 
-    // Get the audio data
-    const audioData = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'audio/mpeg';
+    const contentLength = response.headers.get('content-length');
+    const acceptRanges = response.headers.get('accept-ranges');
+    const contentRange = response.headers.get('content-range');
 
-    console.log('Audio proxy: Successfully fetched', audioData.byteLength, 'bytes');
+    console.log('Audio proxy: Streaming response', {
+      contentType,
+      contentLength,
+      hasRange: !!range,
+      status: response.status
+    });
 
-    // Return the audio with proper CORS headers for Safari
-    return new NextResponse(audioData, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Range, Content-Range',
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-        // Add additional Safari-friendly headers
-        'X-Content-Type-Options': 'nosniff',
-        'Vary': 'Origin', // Help Safari with CORS caching
-      },
+    // Stream the response instead of loading everything into memory
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range, Content-Range',
+      'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+      'X-Content-Type-Options': 'nosniff',
+      'Vary': 'Origin',
+      'Cache-Control': 'public, max-age=3600',
+    };
+
+    if (contentLength) headers['Content-Length'] = contentLength;
+    if (acceptRanges) headers['Accept-Ranges'] = acceptRanges;
+    if (contentRange) headers['Content-Range'] = contentRange;
+
+    // Return streaming response
+    return new NextResponse(response.body, {
+      status: response.status,
+      headers,
     });
 
   } catch (error) {
