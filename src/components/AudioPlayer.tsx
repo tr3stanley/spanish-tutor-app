@@ -19,6 +19,7 @@ interface AudioPlayerProps {
 }
 
 export default function AudioPlayer({
+  podcastId,
   audioSrc,
   transcript,
   onTimeUpdate,
@@ -34,6 +35,9 @@ export default function AudioPlayer({
   const [isExplaining, setIsExplaining] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [explanation, setExplanation] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translation, setTranslation] = useState('');
   const [isSeeking, setIsSeeking] = useState(false);
 
   useEffect(() => {
@@ -179,6 +183,39 @@ export default function AudioPlayer({
     }
   };
 
+  const handleTranslateCurrentSegment = async () => {
+    const currentSegment = getCurrentSegment();
+    if (!currentSegment) return;
+
+    setIsTranslating(true);
+    setShowTranslation(false);
+
+    try {
+      const response = await fetch(`/api/podcasts/${podcastId}/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: currentSegment.text }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setTranslation(result.translation);
+        setShowTranslation(true);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error getting translation:', error);
+      setTranslation('Sorry, there was an error generating the translation. Please try again.');
+      setShowTranslation(true);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
@@ -205,28 +242,52 @@ export default function AudioPlayer({
             <span className="text-xs text-gray-500">
               {formatTime(currentSegment.start_time)} - {formatTime(currentSegment.end_time)}
             </span>
-            <button
-              onClick={handleExplainLast30Seconds}
-              disabled={isExplaining}
-              className="flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isExplaining ? (
-                <>
-                  <svg className="animate-spin w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Explain
-                </>
-              )}
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleExplainLast30Seconds}
+                disabled={isExplaining}
+                className="flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExplaining ? (
+                  <>
+                    <svg className="animate-spin w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Explain
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleTranslateCurrentSegment}
+                disabled={isTranslating}
+                className="flex items-center px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 rounded-md hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isTranslating ? (
+                  <>
+                    <svg className="animate-spin w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Translating...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                    Translate
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -246,6 +307,24 @@ export default function AudioPlayer({
             </button>
           </div>
           <div className="text-sm text-green-700 whitespace-pre-wrap">{explanation}</div>
+        </div>
+      )}
+
+      {/* Translation Display */}
+      {showTranslation && (
+        <div className="mb-4 p-4 bg-purple-50 rounded-lg border-l-4 border-purple-500">
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-medium text-purple-800">Translation</h4>
+            <button
+              onClick={() => setShowTranslation(false)}
+              className="text-purple-600 hover:text-purple-800"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="text-sm text-purple-700 whitespace-pre-wrap">{translation}</div>
         </div>
       )}
 

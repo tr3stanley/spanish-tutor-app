@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@types/multer": "^2.0.0",
+    "better-sqlite3": "^12.2.0",
     "child_process": "^1.0.2",
     "fs": "^0.0.1-security",
     "googleapis": "^160.0.0",
