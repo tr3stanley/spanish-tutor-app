@@ -95,10 +95,11 @@ export default function AudioPlayer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSpeedMenu]);
 
-  // Safari debugging and audio loading
+  // Safari debugging and audio loading with fallback
   useEffect(() => {
     if (audioRef.current && audioSrc) {
       const audio = audioRef.current;
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 
       const handleLoadStart = () => console.log('Safari Debug: Load start');
       const handleLoadedData = () => console.log('Safari Debug: Loaded data');
@@ -114,6 +115,17 @@ export default function AudioPlayer({
           readyState: target.readyState,
           userAgent: navigator.userAgent
         });
+
+        // For Safari CORS errors (code 4), try fallback strategy
+        if (isSafari && target.error?.code === 4 && audioSrc.includes('github.com')) {
+          console.log('Safari Debug: Attempting fallback without CORS restrictions');
+          // Remove CORS-triggering attributes and retry
+          target.removeAttribute('crossorigin');
+          // Force reload without CORS
+          setTimeout(() => {
+            target.load();
+          }, 100);
+        }
       };
       const handleAbort = () => console.log('Safari Debug: Load aborted');
       const handleStalled = () => console.log('Safari Debug: Load stalled');
@@ -130,7 +142,7 @@ export default function AudioPlayer({
       console.log('Safari Debug: Loading audio', {
         src: audioSrc,
         userAgent: navigator.userAgent,
-        isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+        isSafari
       });
 
       audio.load();
@@ -309,7 +321,6 @@ export default function AudioPlayer({
         ref={audioRef}
         src={audioSrc}
         preload="metadata"
-        crossOrigin="anonymous"
         playsInline
       />
 
