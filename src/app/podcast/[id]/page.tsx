@@ -6,6 +6,8 @@ import AudioPlayer from '@/components/AudioPlayer';
 import LessonPlan from '@/components/LessonPlan';
 import TranscriptView from '@/components/TranscriptView';
 import PodcastTutor from '@/components/PodcastTutor';
+import Navigation from '@/components/Navigation';
+import UploadModal from '@/components/UploadModal';
 
 interface PodcastData {
   podcast: {
@@ -41,6 +43,7 @@ export default function PodcastPage() {
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedTab, setSelectedTab] = useState<'lesson' | 'transcript' | 'tutor'>('lesson');
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -121,6 +124,7 @@ export default function PodcastPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navigation onUploadClick={() => setShowUploadModal(true)} />
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -207,6 +211,13 @@ export default function PodcastPage() {
           </div>
         </div>
       </div>
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onUploadSuccess={() => {/* Could refresh or redirect */}}
+      />
     </div>
   );
 }
