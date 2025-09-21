@@ -4,109 +4,75 @@ An AI-powered language learning app that transforms podcasts into interactive le
 
 ## Features
 
-- 🎧 **Podcast Upload**: Drag & drop audio files (MP3, WAV, M4A)
-- 🔤 **Auto Transcription**: Uses YouTube's free caption service for Spanish/Russian
-- 🤖 **AI Lesson Generation**: Creates summaries, grammar rules, and vocabulary lists
-- ⏯️ **Interactive Audio Player**: Synced transcript with clickable segments
-- 💡 **Real-time AI Explanations**: Click "Explain" for instant segment analysis
-- 💰 **Ultra-low Cost**: ~$0-2/month using free AI models
+- 🎧 **Local Audio Processing** - Upload MP3/WAV files or download from YouTube
+- 🤖 **Private AI Transcription** - Uses local Whisper AI (completely offline)
+- 📚 **Smart Lesson Generation** - AI creates vocabulary lists, grammar explanations, and summaries
+- ⏯️ **Interactive Audio Player** - Synced transcript with clickable segments
+- 💬 **Interactive Learning** - Click transcript words for translations, chat with AI tutor
+- 📁 **Folder Organization** - Organize podcasts in custom folders
+- ✅ **Progress Tracking** - Mark podcasts as listened/unlistened
+- 🔒 **Privacy First** - All transcription happens locally on your machine
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
-- **Database**: SQLite (local, no server costs)
-- **Transcription**: YouTube Auto-Captions (free)
-- **AI**: OpenRouter free models (DeepSeek V3, DeepSeek R1)
-- **Audio**: Web Audio API, custom player
+- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
+- **Backend**: Node.js, SQLite database
+- **AI**: Local Whisper (transcription), OpenRouter (lessons)
+- **Audio**: WaveSurfer.js, YouTube integration
 
-## Setup Instructions
+## Quick Start
 
-### 1. Clone and Install
+For detailed setup instructions, see **[SETUP_GUIDE.md](./SETUP_GUIDE.md)**
 
+### Prerequisites
+- Node.js 18+
+- Homebrew (Mac)
+- OpenRouter API key (free signup)
+
+### Basic Setup
 ```bash
-git clone <your-repo>
+# Clone and install
+git clone https://github.com/tr3stanley/spanish-tutor-app.git
 cd spanish-tutor-app
 npm install
-```
 
-### 2. Environment Variables
+# Install Whisper for transcription
+brew install whisper-cpp
 
-```bash
-cp .env.example .env.local
-```
+# Download AI model
+mkdir models
+curl -o models/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
-Edit `.env.local` with your API keys:
+# Configure environment
+cp .env.local.example .env.local
+# Edit .env.local with your OpenRouter API key
 
-```env
-YOUTUBE_API_KEY=your_youtube_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-```
-
-### 3. Get API Keys
-
-#### YouTube API Key (Free)
-1. Go to [Google Cloud Console](https://console.developers.google.com/)
-2. Create a new project or select existing
-3. Enable "YouTube Data API v3"
-4. Create credentials → API key
-5. Copy to `YOUTUBE_API_KEY`
-
-#### OpenRouter API Key (Free)
-1. Sign up at [OpenRouter](https://openrouter.ai/)
-2. Generate an API key
-3. Copy to `OPENROUTER_API_KEY`
-4. **Note**: Many models are free to use!
-
-### 4. Install yt-dlp (Required for captions)
-
-```bash
-# macOS
-brew install yt-dlp
-
-# Ubuntu/Debian
-sudo apt install yt-dlp
-
-# Windows
-# Download from https://github.com/yt-dlp/yt-dlp/releases
-```
-
-### 5. Run the App
-
-```bash
+# Start the app
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Visit http://localhost:3000 to start learning!
 
 ## How It Works
 
-### Upload Process
-1. **Upload**: Drop a Spanish/Russian podcast
-2. **YouTube Upload**: Temporarily uploads to YouTube (unlisted)
-3. **Caption Generation**: YouTube auto-generates captions (~15 minutes)
-4. **Download & Cleanup**: Downloads captions, deletes YouTube video
-5. **AI Processing**: Generates lesson plan with OpenRouter AI
+1. **Upload** - Drop an audio file or paste a YouTube URL
+2. **Transcribe** - Local Whisper AI converts speech to text (private)
+3. **Learn** - AI generates vocabulary, grammar notes, and summaries
+4. **Study** - Interactive transcript with translations and AI tutoring
+5. **Organize** - Create folders and track listening progress
 
-### Study Experience
-1. **Lesson Plan**: AI-generated summary, grammar, vocabulary
-2. **Interactive Transcript**: Click segments to jump to audio
-3. **Real-time Help**: "Explain" button for difficult segments
-4. **Synced Playback**: Transcript highlights current segment
+## Privacy & Security
 
-## Cost Breakdown
-
-- **Database**: $0 (SQLite local)
-- **Transcription**: $0 (YouTube Auto-Captions)
-- **AI**: $0 (OpenRouter free models)
-- **Storage**: $0 (local files)
-- **Total**: ~$0-2/month
+- **Local transcription** - Audio never leaves your computer
+- **Minimal data sharing** - Only text sent to AI for lesson generation
+- **No tracking** - No analytics or user behavior collection
+- **Open source** - Review the code yourself
 
 ## Supported Languages
 
-- **Spanish** 🇪🇸
-- **Russian** 🇷🇺
-
-YouTube auto-captions work well for both languages.
+- 🇪🇸 **Spanish** - Full support with grammar explanations
+- 🇷🇺 **Russian** - Full support with Cyrillic handling
+- Easily extensible to other languages
 
 ## File Structure
 
