@@ -95,18 +95,91 @@ export default function AudioPlayer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSpeedMenu]);
 
-  // Remove this useEffect - it was causing the audio to loop
+  // Safari debugging and audio loading
+  useEffect(() => {
+    if (audioRef.current && audioSrc) {
+      const audio = audioRef.current;
 
-  const togglePlayPause = () => {
+      const handleLoadStart = () => console.log('Safari Debug: Load start');
+      const handleLoadedData = () => console.log('Safari Debug: Loaded data');
+      const handleCanPlay = () => console.log('Safari Debug: Can play');
+      const handleError = (e: Event) => {
+        const target = e.target as HTMLAudioElement;
+        console.error('Safari Debug: Audio error', {
+          error: target.error,
+          code: target.error?.code,
+          message: target.error?.message,
+          src: target.src,
+          networkState: target.networkState,
+          readyState: target.readyState,
+          userAgent: navigator.userAgent
+        });
+      };
+      const handleAbort = () => console.log('Safari Debug: Load aborted');
+      const handleStalled = () => console.log('Safari Debug: Load stalled');
+      const handleSuspend = () => console.log('Safari Debug: Load suspended');
+
+      audio.addEventListener('loadstart', handleLoadStart);
+      audio.addEventListener('loadeddata', handleLoadedData);
+      audio.addEventListener('canplay', handleCanPlay);
+      audio.addEventListener('error', handleError);
+      audio.addEventListener('abort', handleAbort);
+      audio.addEventListener('stalled', handleStalled);
+      audio.addEventListener('suspend', handleSuspend);
+
+      console.log('Safari Debug: Loading audio', {
+        src: audioSrc,
+        userAgent: navigator.userAgent,
+        isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+      });
+
+      audio.load();
+
+      return () => {
+        audio.removeEventListener('loadstart', handleLoadStart);
+        audio.removeEventListener('loadeddata', handleLoadedData);
+        audio.removeEventListener('canplay', handleCanPlay);
+        audio.removeEventListener('error', handleError);
+        audio.removeEventListener('abort', handleAbort);
+        audio.removeEventListener('stalled', handleStalled);
+        audio.removeEventListener('suspend', handleSuspend);
+      };
+    }
+  }, [audioSrc]);
+
+  const togglePlayPause = async () => {
     const audio = audioRef.current;
     if (!audio) return;
 
     if (isPlaying) {
       audio.pause();
+      setIsPlaying(false);
     } else {
-      audio.play();
+      try {
+        console.log('Safari Debug: Attempting to play audio', {
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+          src: audio.src,
+          canPlayType: audio.canPlayType('audio/mpeg')
+        });
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+          console.log('Safari Debug: Play promise resolved successfully');
+        }
+        setIsPlaying(true);
+      } catch (error) {
+        console.error('Safari Debug: Play failed', {
+          error,
+          message: (error as Error).message,
+          name: (error as Error).name,
+          readyState: audio.readyState,
+          networkState: audio.networkState
+        });
+        setIsPlaying(false);
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,7 +305,13 @@ export default function AudioPlayer({
 
   return (
     <div className="bg-gray-50 rounded-lg p-6">
-      <audio ref={audioRef} src={audioSrc} preload="auto" />
+      <audio
+        ref={audioRef}
+        src={audioSrc}
+        preload="metadata"
+        crossOrigin="anonymous"
+        playsInline
+      />
 
       {/* Current Segment Display */}
       {currentSegment && (
