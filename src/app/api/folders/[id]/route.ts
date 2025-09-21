@@ -13,6 +13,14 @@ export async function PUT(
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
+    // In production (Vercel), the database is read-only, so folder updates are disabled
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Folder updates are disabled in production (read-only database)' },
+        { status: 403 }
+      );
+    }
+
     const db = await getDatabase();
     await db.run('UPDATE folders SET name = ? WHERE id = ?', [name.trim(), parseInt(id)]);
 
@@ -28,6 +36,12 @@ export async function PUT(
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return NextResponse.json({ error: 'Folder name already exists' }, { status: 400 });
     }
+    if (error.code === 'SQLITE_READONLY') {
+      return NextResponse.json(
+        { error: 'Database is read-only. Folder management is only available in local development.' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: 'Failed to update folder' },
       { status: 500 }
@@ -41,6 +55,15 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
+    // In production (Vercel), the database is read-only, so folder deletion is disabled
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Folder deletion is disabled in production (read-only database)' },
+        { status: 403 }
+      );
+    }
+
     const db = await getDatabase();
 
     // Check if folder has podcasts
@@ -61,6 +84,12 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting folder:', error);
+    if (error.code === 'SQLITE_READONLY') {
+      return NextResponse.json(
+        { error: 'Database is read-only. Folder management is only available in local development.' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: 'Failed to delete folder' },
       { status: 500 }

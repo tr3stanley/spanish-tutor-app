@@ -9,6 +9,14 @@ export async function PUT(
     const { id } = await params;
     const { folder_id, listened } = await request.json();
 
+    // In production (Vercel), the database is read-only, so podcast updates are disabled
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Podcast updates are disabled in production (read-only database)' },
+        { status: 403 }
+      );
+    }
+
     const db = await getDatabase();
 
     const updates = [];
@@ -42,8 +50,14 @@ export async function PUT(
     }
 
     return NextResponse.json({ podcast });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating podcast:', error);
+    if (error.code === 'SQLITE_READONLY') {
+      return NextResponse.json(
+        { error: 'Database is read-only. Podcast management is only available in local development.' },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { error: 'Failed to update podcast' },
       { status: 500 }

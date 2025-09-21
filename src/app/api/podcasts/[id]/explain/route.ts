@@ -20,11 +20,17 @@ export async function POST(
 
     const db = await getDatabase();
 
-    // Check if we already have an explanation for this segment
-    const existingExplanation = await db.get(
-      'SELECT * FROM explanations WHERE podcast_id = ? AND start_time = ? AND end_time = ?',
-      [podcastId, startTime, endTime]
-    );
+    // Check if we already have an explanation for this segment (only in development)
+    let existingExplanation = null;
+    try {
+      existingExplanation = await db.get(
+        'SELECT * FROM explanations WHERE podcast_id = ? AND start_time = ? AND end_time = ?',
+        [podcastId, startTime, endTime]
+      );
+    } catch (error) {
+      // Database might be read-only in production, continue without caching
+      console.log('Could not check for existing explanation (read-only database)');
+    }
 
     if (existingExplanation) {
       return NextResponse.json({ explanation: existingExplanation.explanation });
@@ -80,11 +86,16 @@ export async function POST(
     // Generate explanation
     const explanation = await explainSegment(segmentText, podcast.language, context);
 
-    // Save explanation to database
-    await db.run(
-      'INSERT INTO explanations (podcast_id, start_time, end_time, explanation) VALUES (?, ?, ?, ?)',
-      [podcastId, startTime, endTime, explanation]
-    );
+    // Try to save explanation to database (only works in development)
+    try {
+      await db.run(
+        'INSERT INTO explanations (podcast_id, start_time, end_time, explanation) VALUES (?, ?, ?, ?)',
+        [podcastId, startTime, endTime, explanation]
+      );
+    } catch (error) {
+      // Database might be read-only in production, continue without saving
+      console.log('Could not save explanation (read-only database)');
+    }
 
     return NextResponse.json({ explanation });
 
