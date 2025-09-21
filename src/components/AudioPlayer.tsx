@@ -25,6 +25,11 @@ export default function AudioPlayer({
   onTimeUpdate,
   onExplanationRequest
 }: AudioPlayerProps) {
+  // Safari-compatible audio source
+  const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+  const safariAudioSrc = isSafari && audioSrc.includes('github.com')
+    ? `/api/audio-proxy?url=${encodeURIComponent(audioSrc)}`
+    : audioSrc;
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -95,11 +100,11 @@ export default function AudioPlayer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSpeedMenu]);
 
-  // Safari debugging and audio loading with fallback
+  // Safari debugging and audio loading with proxy
   useEffect(() => {
-    if (audioRef.current && audioSrc) {
+    if (audioRef.current && safariAudioSrc) {
       const audio = audioRef.current;
-      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+      const userIsSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 
       const handleLoadStart = () => console.log('Safari Debug: Load start');
       const handleLoadedData = () => console.log('Safari Debug: Loaded data');
@@ -111,21 +116,12 @@ export default function AudioPlayer({
           code: target.error?.code,
           message: target.error?.message,
           src: target.src,
+          originalSrc: audioSrc,
+          proxiedSrc: safariAudioSrc,
           networkState: target.networkState,
           readyState: target.readyState,
           userAgent: navigator.userAgent
         });
-
-        // For Safari CORS errors (code 4), try fallback strategy
-        if (isSafari && target.error?.code === 4 && audioSrc.includes('github.com')) {
-          console.log('Safari Debug: Attempting fallback without CORS restrictions');
-          // Remove CORS-triggering attributes and retry
-          target.removeAttribute('crossorigin');
-          // Force reload without CORS
-          setTimeout(() => {
-            target.load();
-          }, 100);
-        }
       };
       const handleAbort = () => console.log('Safari Debug: Load aborted');
       const handleStalled = () => console.log('Safari Debug: Load stalled');
@@ -140,9 +136,11 @@ export default function AudioPlayer({
       audio.addEventListener('suspend', handleSuspend);
 
       console.log('Safari Debug: Loading audio', {
-        src: audioSrc,
+        originalSrc: audioSrc,
+        proxiedSrc: safariAudioSrc,
+        usingProxy: safariAudioSrc !== audioSrc,
         userAgent: navigator.userAgent,
-        isSafari
+        isSafari: userIsSafari
       });
 
       audio.load();
@@ -157,7 +155,7 @@ export default function AudioPlayer({
         audio.removeEventListener('suspend', handleSuspend);
       };
     }
-  }, [audioSrc]);
+  }, [audioSrc, safariAudioSrc]);
 
   const togglePlayPause = async () => {
     const audio = audioRef.current;
@@ -319,7 +317,7 @@ export default function AudioPlayer({
     <div className="bg-gray-50 rounded-lg p-6">
       <audio
         ref={audioRef}
-        src={audioSrc}
+        src={safariAudioSrc}
         preload="metadata"
         playsInline
       />
