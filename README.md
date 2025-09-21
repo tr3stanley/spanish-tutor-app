@@ -57,9 +57,10 @@ Visit http://localhost:3000 to start learning!
 
 1. **Upload** - Drop an audio file or paste a YouTube URL
 2. **Transcribe** - Local Whisper AI converts speech to text (private)
-3. **Learn** - AI generates vocabulary, grammar notes, and summaries
-4. **Study** - Interactive transcript with translations and AI tutoring
-5. **Organize** - Create folders and track listening progress
+3. **Host** - Upload audio files to Archive.org for Safari compatibility
+4. **Learn** - AI generates vocabulary, grammar notes, and summaries
+5. **Study** - Interactive transcript with translations and AI tutoring
+6. **Organize** - Create folders and track listening progress
 
 ## Privacy & Security
 
@@ -106,7 +107,54 @@ src/
 2. Add language support in AI prompts (`ai.ts`)
 3. Ensure YouTube supports auto-captions for the language
 
+## Audio Hosting Setup
+
+### For Safari Compatibility
+
+Safari browsers have strict CORS policies that block GitHub Release audio files. For Safari support, upload your audio files to Archive.org:
+
+1. **Process podcasts locally**:
+   ```bash
+   npm run dev
+   # Upload MP3 files through the web interface
+   # Files are saved to uploads/ folder after processing
+   ```
+
+2. **Upload to Archive.org**:
+   - Go to https://archive.org/create
+   - Create a free account
+   - Upload all MP3 files from `uploads/` folder
+   - Set item type to "Community Audio" or "Podcasts"
+   - Make the item public
+
+3. **Update database with Archive.org URLs**:
+   ```bash
+   # Update each podcast's file_path in the database
+   # Format: https://archive.org/download/[item-id]/[filename].mp3
+   sqlite3 data/podcasts.db "UPDATE podcasts SET file_path = 'https://archive.org/download/your-item-id/filename.mp3' WHERE id = X;"
+   ```
+
+4. **Deploy changes**:
+   ```bash
+   git add data/podcasts.db
+   git commit -m "Update podcast URLs to Archive.org"
+   git push
+   ```
+
+### Why Archive.org?
+
+- ✅ **Free forever** - No storage limits or costs
+- ✅ **Safari compatible** - Proper CORS headers
+- ✅ **Educational mission** - Perfect for language learning content
+- ✅ **Permanent hosting** - Files never expire
+- ✅ **Global CDN** - Fast loading worldwide
+
 ## Troubleshooting
+
+### "Audio won't load in Safari"
+- Ensure audio URLs point to Archive.org (not GitHub releases)
+- Check that Archive.org item is set to public
+- Verify the direct MP3 URL works in a browser
 
 ### "YouTube upload failed"
 - Check YouTube API key is valid
