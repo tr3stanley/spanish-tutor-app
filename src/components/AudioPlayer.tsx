@@ -25,10 +25,10 @@ export default function AudioPlayer({
   onTimeUpdate,
   onExplanationRequest
 }: AudioPlayerProps) {
-  // Safari-compatible audio source
+  // Safari-compatible audio source with cache busting
   const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
   const safariAudioSrc = isSafari && audioSrc.includes('github.com')
-    ? `/api/audio-proxy?url=${encodeURIComponent(audioSrc)}`
+    ? `/api/audio-proxy?url=${encodeURIComponent(audioSrc)}&t=${Date.now()}`
     : audioSrc;
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);

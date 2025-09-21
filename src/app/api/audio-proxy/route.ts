@@ -25,6 +25,14 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       console.error('Audio proxy: Failed to fetch', response.status, response.statusText);
+
+      // Special handling for 404 - provide more helpful error message
+      if (response.status === 404) {
+        return NextResponse.json({
+          error: `Audio file not found. URL may be outdated or incorrect: ${audioUrl}`
+        }, { status: 404 });
+      }
+
       return NextResponse.json({
         error: `Failed to fetch audio: ${response.status} ${response.statusText}`
       }, { status: response.status });
@@ -46,6 +54,9 @@ export async function GET(request: NextRequest) {
         'Access-Control-Allow-Headers': 'Range, Content-Range',
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        // Add additional Safari-friendly headers
+        'X-Content-Type-Options': 'nosniff',
+        'Vary': 'Origin', // Help Safari with CORS caching
       },
     });
 
