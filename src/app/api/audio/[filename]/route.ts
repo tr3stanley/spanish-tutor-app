@@ -14,7 +14,7 @@ export async function GET(
     let stats;
     try {
       stats = statSync(audioPath);
-    } catch (error) {
+    } catch {
       return new NextResponse('File not found', { status: 404 });
     }
 
@@ -24,7 +24,7 @@ export async function GET(
     // If no range header, serve the entire file
     if (!range) {
       const stream = createReadStream(audioPath);
-      return new NextResponse(stream as any, {
+      return new NextResponse(stream as unknown as ReadableStream, {
         status: 200,
         headers: {
           'Content-Type': 'audio/mpeg',
@@ -43,7 +43,7 @@ export async function GET(
     // Create read stream for the requested range
     const stream = createReadStream(audioPath, { start, end });
 
-    return new NextResponse(stream as any, {
+    return new NextResponse(stream as unknown as ReadableStream, {
       status: 206, // Partial Content
       headers: {
         'Content-Type': 'audio/mpeg',

@@ -94,7 +94,7 @@ export default function OrganizedPodcastList({ podcasts, onPodcastDeleted }: Org
 
     if (commonParts.length > 0) {
       // Use the longest common part as series name
-      let seriesName = commonParts[0]
+      const seriesName = commonParts[0]
         .replace(/^[-–—_#\s]+/, '') // Remove leading separators
         .replace(/[-–—_#\s]+$/, '') // Remove trailing separators
         .replace(/[-–—_#]/g, ' ') // Convert separators to spaces

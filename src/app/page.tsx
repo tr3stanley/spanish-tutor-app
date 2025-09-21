@@ -130,7 +130,7 @@ export default function Home() {
                 <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
                 <div>
                   <div className="font-medium text-blue-900">Upload Audio</div>
-                  <div className="text-blue-700">Click "Upload Podcast" to add Spanish or Russian audio files</div>
+                  <div className="text-blue-700">Click &quot;Upload Podcast&quot; to add Spanish or Russian audio files</div>
                 </div>
               </div>
               <div className="flex items-start space-x-3">

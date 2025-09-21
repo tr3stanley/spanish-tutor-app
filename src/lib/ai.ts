@@ -94,9 +94,9 @@ Make this educational and engaging for an intermediate ${languageName} learner.
 
   try {
     // Parse the response using section markers
-    const summaryMatch = response.match(/---SUMMARY---(.*?)---GRAMMAR---/s);
-    const grammarMatch = response.match(/---GRAMMAR---(.*?)---VOCABULARY---/s);
-    const vocabularyMatch = response.match(/---VOCABULARY---(.*?)$/s);
+    const summaryMatch = response.match(/---SUMMARY---([\s\S]*?)---GRAMMAR---/);
+    const grammarMatch = response.match(/---GRAMMAR---([\s\S]*?)---VOCABULARY---/);
+    const vocabularyMatch = response.match(/---VOCABULARY---([\s\S]*?)$/);
 
     return {
       summary: summaryMatch ? summaryMatch[1].trim() : response,
