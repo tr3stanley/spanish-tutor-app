@@ -14,6 +14,12 @@ export async function getDatabase(): Promise<Database> {
 
   // Initialize tables
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS podcasts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -25,7 +31,10 @@ export async function getDatabase(): Promise<Database> {
       processed_at DATETIME,
       youtube_video_id TEXT,
       transcript_path TEXT,
-      lesson_generated BOOLEAN DEFAULT FALSE
+      lesson_generated BOOLEAN DEFAULT FALSE,
+      folder_id INTEGER,
+      listened BOOLEAN DEFAULT FALSE,
+      FOREIGN KEY (folder_id) REFERENCES folders (id)
     );
 
     CREATE TABLE IF NOT EXISTS transcripts (
@@ -62,6 +71,12 @@ export async function getDatabase(): Promise<Database> {
   return db;
 }
 
+export interface Folder {
+  id?: number;
+  name: string;
+  created_at?: string;
+}
+
 export interface Podcast {
   id?: number;
   title: string;
@@ -74,6 +89,8 @@ export interface Podcast {
   youtube_video_id?: string;
   transcript_path?: string;
   lesson_generated?: boolean;
+  folder_id?: number;
+  listened?: boolean;
 }
 
 export interface Transcript {

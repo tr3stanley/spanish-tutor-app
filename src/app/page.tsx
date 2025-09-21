@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navigation from '@/components/Navigation';
-import OrganizedPodcastList from '@/components/OrganizedPodcastList';
+import FolderPodcastList from '@/components/FolderPodcastList';
 import UploadModal from '@/components/UploadModal';
 
 interface Podcast {
@@ -14,6 +14,9 @@ interface Podcast {
   processed_at?: string;
   lesson_generated: boolean;
   has_lesson: boolean;
+  folder_id?: number;
+  folder_name?: string;
+  listened?: boolean;
 }
 
 export default function Home() {
@@ -96,11 +99,11 @@ export default function Home() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">
-                Podcast Series
+                Podcast Library
               </h2>
               {totalPodcasts > 0 && (
                 <div className="text-sm text-gray-500">
-                  Organized by series • Click to expand episodes
+                  Organized in folders • Click to expand
                 </div>
               )}
             </div>
@@ -113,7 +116,7 @@ export default function Home() {
                 <p className="text-gray-500">Loading your podcasts...</p>
               </div>
             ) : (
-              <OrganizedPodcastList
+              <FolderPodcastList
                 podcasts={podcasts}
                 onPodcastDeleted={fetchPodcasts}
               />

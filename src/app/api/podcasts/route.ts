@@ -7,9 +7,11 @@ export async function GET() {
     const podcasts = await db.all(`
       SELECT
         p.*,
-        CASE WHEN l.id IS NOT NULL THEN 1 ELSE 0 END as has_lesson
+        CASE WHEN l.id IS NOT NULL THEN 1 ELSE 0 END as has_lesson,
+        f.name as folder_name
       FROM podcasts p
       LEFT JOIN lessons l ON p.id = l.podcast_id
+      LEFT JOIN folders f ON p.folder_id = f.id
       ORDER BY p.created_at DESC
     `);
 
