@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const folder = await db.get('SELECT * FROM folders WHERE id = ?', [result.lastID]);
 
     return NextResponse.json({ folder });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating folder:', error);
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return NextResponse.json({ error: 'Folder name already exists' }, { status: 400 });

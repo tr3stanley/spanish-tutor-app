@@ -23,7 +23,7 @@ export async function PUT(
     }
 
     return NextResponse.json({ folder });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating folder:', error);
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       return NextResponse.json({ error: 'Folder name already exists' }, { status: 400 });
@@ -59,7 +59,7 @@ export async function DELETE(
     await db.run('DELETE FROM folders WHERE id = ?', [parseInt(id)]);
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting folder:', error);
     return NextResponse.json(
       { error: 'Failed to delete folder' },
