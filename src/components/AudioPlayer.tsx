@@ -29,6 +29,8 @@ export default function AudioPlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [isExplaining, setIsExplaining] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [explanation, setExplanation] = useState('');
@@ -68,6 +70,26 @@ export default function AudioPlayer({
       audio.removeEventListener('ended', handleEnded);
     };
   }, [onTimeUpdate, isSeeking]);
+
+  // Update playback speed when it changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
+  // Close speed menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSpeedMenu && !(event.target as Element).closest('.speed-control')) {
+        setShowSpeedMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSpeedMenu]);
 
   // Remove this useEffect - it was causing the audio to loop
 
@@ -129,6 +151,13 @@ export default function AudioPlayer({
     audio.volume = newVolume;
     setVolume(newVolume);
   };
+
+  const handleSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+    setShowSpeedMenu(false);
+  };
+
+  const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
   const handleExplainLast30Seconds = async () => {
     const endTime = currentTime;
@@ -310,20 +339,53 @@ export default function AudioPlayer({
           </button>
         </div>
 
-        {/* Volume Control */}
-        <div className="flex items-center justify-center space-x-2">
-          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 10H4a1 1 0 00-1 1v2a1 1 0 001 1h2l3.5 3.5a1 1 0 001.6-.8V6.3a1 1 0 00-1.6-.8L6 10z" />
-          </svg>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={volume}
-            onChange={handleVolumeChange}
-            className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-          />
+        {/* Volume and Speed Controls */}
+        <div className="flex items-center justify-center space-x-6">
+          {/* Volume Control */}
+          <div className="flex items-center space-x-2">
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 10H4a1 1 0 00-1 1v2a1 1 0 001 1h2l3.5 3.5a1 1 0 001.6-.8V6.3a1 1 0 00-1.6-.8L6 10z" />
+            </svg>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={volume}
+              onChange={handleVolumeChange}
+              className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          {/* Speed Control */}
+          <div className="relative speed-control">
+            <button
+              onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+              className="flex items-center space-x-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">{playbackSpeed}x</span>
+            </button>
+
+            {/* Speed Menu */}
+            {showSpeedMenu && (
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10">
+                {speedOptions.map((speed) => (
+                  <button
+                    key={speed}
+                    onClick={() => handleSpeedChange(speed)}
+                    className={`block w-full px-4 py-2 text-sm text-left hover:bg-gray-100 transition-colors ${
+                      speed === playbackSpeed ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
