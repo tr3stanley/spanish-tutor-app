@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Navigation from '@/components/Navigation';
 import FolderPodcastList from '@/components/FolderPodcastList';
 import UploadModal from '@/components/UploadModal';
+import DownloadManager from '@/components/DownloadManager';
+import { offlineCleanup } from '@/lib/offline-cleanup';
 
 interface Podcast {
   id: number;
@@ -23,6 +25,7 @@ export default function Home() {
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showDownloadManager, setShowDownloadManager] = useState(false);
 
   const fetchPodcasts = async () => {
     try {
@@ -38,6 +41,8 @@ export default function Home() {
 
   useEffect(() => {
     fetchPodcasts();
+    // Initialize offline cleanup service
+    offlineCleanup.init();
   }, []);
 
   const handleUploadSuccess = () => {
@@ -91,6 +96,27 @@ export default function Home() {
               </div>
               <div className="text-sm text-gray-600">Russian</div>
             </div>
+          </div>
+        )}
+
+        {/* Download Manager Section */}
+        {totalPodcasts > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Offline Downloads
+              </h2>
+              <button
+                onClick={() => setShowDownloadManager(!showDownloadManager)}
+                className="flex items-center px-4 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                </svg>
+                {showDownloadManager ? 'Hide Downloads' : 'Manage Downloads'}
+              </button>
+            </div>
+            {showDownloadManager && <DownloadManager />}
           </div>
         )}
 

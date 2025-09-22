@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { offlineStorage } from '@/lib/offline-storage';
+import { offlineCleanup } from '@/lib/offline-cleanup';
 
 interface Transcript {
   id: number;
@@ -13,6 +15,7 @@ interface AudioPlayerProps {
   podcastId: number;
   audioSrc: string;
   transcript: Transcript[];
+  title?: string;
   onTimeUpdate: (time: number) => void;
   onSeekTo: (time: number) => void;
   onExplanationRequest: (startTime: number, endTime: number) => Promise<string>;
@@ -22,14 +25,10 @@ export default function AudioPlayer({
   podcastId,
   audioSrc,
   transcript,
+  title = `Episode ${podcastId}`,
   onTimeUpdate,
   onExplanationRequest
 }: AudioPlayerProps) {
-  // Safari-compatible audio source with Edge proxy (only for GitHub URLs)
-  const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-  const safariAudioSrc = isSafari && audioSrc.includes('github.com')
-    ? `/api/audio-proxy-edge?url=${encodeURIComponent(audioSrc)}&t=${Date.now()}`
-    : audioSrc; // Archive.org and other hosts work directly
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -44,6 +43,46 @@ export default function AudioPlayer({
   const [showTranslation, setShowTranslation] = useState(false);
   const [translation, setTranslation] = useState('');
   const [isSeeking, setIsSeeking] = useState(false);
+
+  // Offline storage states
+  const [isDownloaded, setIsDownloaded] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [offlineAudioUrl, setOfflineAudioUrl] = useState<string | null>(null);
+  const [actualAudioSrc, setActualAudioSrc] = useState<string>('');
+
+  // Determine final audio source (offline > proxy > direct)
+  useEffect(() => {
+    const checkOfflineStatus = async () => {
+      try {
+        const downloaded = await offlineStorage.isEpisodeDownloaded(podcastId);
+        setIsDownloaded(downloaded);
+
+        if (downloaded) {
+          const offlineUrl = await offlineStorage.getOfflineAudioUrl(podcastId);
+          setOfflineAudioUrl(offlineUrl);
+          setActualAudioSrc(offlineUrl || audioSrc);
+        } else {
+          // Use proxy for Safari + GitHub URLs, direct for everything else
+          const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+          const proxiedSrc = isSafari && audioSrc.includes('github.com')
+            ? `/api/audio-proxy-edge?url=${encodeURIComponent(audioSrc)}&t=${Date.now()}`
+            : audioSrc;
+          setActualAudioSrc(proxiedSrc);
+        }
+      } catch (error) {
+        console.error('Failed to check offline status:', error);
+        // Fallback to online source
+        const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+        const proxiedSrc = isSafari && audioSrc.includes('github.com')
+          ? `/api/audio-proxy-edge?url=${encodeURIComponent(audioSrc)}&t=${Date.now()}`
+          : audioSrc;
+        setActualAudioSrc(proxiedSrc);
+      }
+    };
+
+    checkOfflineStatus();
+  }, [podcastId, audioSrc]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -100,32 +139,33 @@ export default function AudioPlayer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSpeedMenu]);
 
-  // Safari debugging and audio loading with proxy
+  // Safari debugging and audio loading
   useEffect(() => {
-    if (audioRef.current && safariAudioSrc) {
+    if (audioRef.current && actualAudioSrc) {
       const audio = audioRef.current;
       const userIsSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 
-      const handleLoadStart = () => console.log('Safari Debug: Load start');
-      const handleLoadedData = () => console.log('Safari Debug: Loaded data');
-      const handleCanPlay = () => console.log('Safari Debug: Can play');
+      const handleLoadStart = () => console.log('Audio Debug: Load start');
+      const handleLoadedData = () => console.log('Audio Debug: Loaded data');
+      const handleCanPlay = () => console.log('Audio Debug: Can play');
       const handleError = (e: Event) => {
         const target = e.target as HTMLAudioElement;
-        console.error('Safari Debug: Audio error', {
+        console.error('Audio Debug: Audio error', {
           error: target.error,
           code: target.error?.code,
           message: target.error?.message,
           src: target.src,
           originalSrc: audioSrc,
-          proxiedSrc: safariAudioSrc,
+          actualSrc: actualAudioSrc,
+          isOffline: isDownloaded,
           networkState: target.networkState,
           readyState: target.readyState,
           userAgent: navigator.userAgent
         });
       };
-      const handleAbort = () => console.log('Safari Debug: Load aborted');
-      const handleStalled = () => console.log('Safari Debug: Load stalled');
-      const handleSuspend = () => console.log('Safari Debug: Load suspended');
+      const handleAbort = () => console.log('Audio Debug: Load aborted');
+      const handleStalled = () => console.log('Audio Debug: Load stalled');
+      const handleSuspend = () => console.log('Audio Debug: Load suspended');
 
       audio.addEventListener('loadstart', handleLoadStart);
       audio.addEventListener('loadeddata', handleLoadedData);
@@ -135,10 +175,10 @@ export default function AudioPlayer({
       audio.addEventListener('stalled', handleStalled);
       audio.addEventListener('suspend', handleSuspend);
 
-      console.log('Safari Debug: Loading audio', {
+      console.log('Audio Debug: Loading audio', {
         originalSrc: audioSrc,
-        proxiedSrc: safariAudioSrc,
-        usingProxy: safariAudioSrc !== audioSrc,
+        actualSrc: actualAudioSrc,
+        isOffline: isDownloaded,
         userAgent: navigator.userAgent,
         isSafari: userIsSafari
       });
@@ -155,7 +195,57 @@ export default function AudioPlayer({
         audio.removeEventListener('suspend', handleSuspend);
       };
     }
-  }, [audioSrc, safariAudioSrc]);
+  }, [actualAudioSrc, audioSrc, isDownloaded]);
+
+  // Download episode for offline use
+  const handleDownload = async () => {
+    if (isDownloading || isDownloaded) return;
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
+
+    try {
+      const success = await offlineStorage.downloadEpisode(
+        podcastId,
+        title,
+        audioSrc,
+        (progress) => setDownloadProgress(progress)
+      );
+
+      if (success) {
+        setIsDownloaded(true);
+        // Update audio source to use offline version
+        const offlineUrl = await offlineStorage.getOfflineAudioUrl(podcastId);
+        if (offlineUrl) {
+          setOfflineAudioUrl(offlineUrl);
+          setActualAudioSrc(offlineUrl);
+        }
+      }
+    } catch (error) {
+      console.error('Download failed:', error);
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
+
+  // Remove offline episode
+  const handleRemoveOffline = async () => {
+    try {
+      await offlineStorage.removeEpisode(podcastId);
+      setIsDownloaded(false);
+      setOfflineAudioUrl(null);
+
+      // Reset to online source
+      const isSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+      const proxiedSrc = isSafari && audioSrc.includes('github.com')
+        ? `/api/audio-proxy-edge?url=${encodeURIComponent(audioSrc)}&t=${Date.now()}`
+        : audioSrc;
+      setActualAudioSrc(proxiedSrc);
+    } catch (error) {
+      console.error('Failed to remove offline episode:', error);
+    }
+  };
 
   const togglePlayPause = async () => {
     const audio = audioRef.current;
@@ -317,10 +407,66 @@ export default function AudioPlayer({
     <div className="bg-gray-50 rounded-lg p-6">
       <audio
         ref={audioRef}
-        src={safariAudioSrc}
+        src={actualAudioSrc}
         preload="metadata"
         playsInline
       />
+
+      {/* Offline Download Controls */}
+      <div className="mb-4 flex items-center justify-between p-3 bg-white rounded-lg border">
+        <div className="flex items-center space-x-2">
+          {isDownloaded ? (
+            <>
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-green-700 font-medium">Downloaded for offline use</span>
+            </>
+          ) : (
+            <>
+              <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
+              <span className="text-sm text-gray-600">Stream online</span>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          {isDownloading ? (
+            <div className="flex items-center space-x-2">
+              <div className="w-32 bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${downloadProgress}%` }}
+                ></div>
+              </div>
+              <span className="text-xs text-gray-500">{Math.round(downloadProgress)}%</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              {isDownloaded ? (
+                <button
+                  onClick={handleRemoveOffline}
+                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  onClick={handleDownload}
+                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                >
+                  Download
+                </button>
+              )}
+              <button
+                onClick={() => offlineCleanup.markEpisodeAsListened(podcastId)}
+                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                title="Mark as listened (auto-removes download after 24h)"
+              >
+                ✓ Listened
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Current Segment Display */}
       {currentSegment && (
