@@ -8,6 +8,7 @@ import TranscriptView from '@/components/TranscriptView';
 import PodcastTutor from '@/components/PodcastTutor';
 import Navigation from '@/components/Navigation';
 import UploadModal from '@/components/UploadModal';
+import ScrollingTitle from '@/components/ScrollingTitle';
 
 interface PodcastData {
   podcast: {
@@ -129,8 +130,15 @@ export default function PodcastPage() {
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="flex items-center space-x-3 mb-4">
-            <span className="text-2xl">{languageFlag}</span>
-            <h1 className="text-3xl font-bold text-gray-900">{data.podcast.title}</h1>
+            <span className="text-2xl flex-shrink-0">{languageFlag}</span>
+            <div className="flex-1 min-w-0">
+              <ScrollingTitle
+                text={data.podcast.title}
+                className="text-3xl font-bold text-gray-900"
+                speed={40}
+                pauseDuration={1500}
+              />
+            </div>
           </div>
 
           {/* Audio Player */}

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import ScrollingTitle from './ScrollingTitle';
 
 interface Podcast {
   id: number;
@@ -397,9 +398,12 @@ function PodcastItem({
           <span className="text-sm">{languageFlag}</span>
           <Link
             href={`/podcast/${podcast.id}`}
-            className="font-medium text-gray-900 hover:text-blue-600 truncate"
+            className="font-medium text-gray-900 hover:text-blue-600 flex-1 min-w-0"
           >
-            {podcast.title}
+            <ScrollingTitle
+              text={podcast.title}
+              className="font-medium text-gray-900 hover:text-blue-600"
+            />
           </Link>
           {podcast.listened && (
             <span className="text-green-600 text-sm">✓ Listened</span>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { offlineStorage, formatFileSize } from '@/lib/offline-storage';
+import ScrollingTitle from './ScrollingTitle';
 
 interface DownloadedEpisode {
   id: number;
@@ -152,7 +153,12 @@ export default function DownloadManager() {
               className="flex items-center justify-between p-3 border rounded hover:bg-gray-50"
             >
               <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-sm truncate">{episode.title}</h4>
+                <ScrollingTitle
+                  text={episode.title}
+                  className="font-medium text-sm"
+                  speed={25}
+                  pauseDuration={800}
+                />
                 {showDetails && (
                   <div className="text-xs text-gray-500 mt-1">
                     Downloaded: {new Date(episode.downloadedAt).toLocaleDateString()}
