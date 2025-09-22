@@ -142,6 +142,8 @@ body {
   box-shadow: 0 0 12px rgba(159, 122, 234, 0.8);
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
+  z-index: 30;
   margin-top: -6px;
 }
 
@@ -165,6 +167,8 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 0 12px rgba(159, 122, 234, 0.8);
   cursor: pointer;
+  position: relative;
+  z-index: 30;
   margin-top: -6px;
 }
 
@@ -191,7 +195,7 @@ body {
 
 .progress-slider input[type="range"] {
   position: relative;
-  z-index: 2;
+  z-index: 20;
   background: transparent;
 }
 

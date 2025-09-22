@@ -405,9 +405,9 @@ export default function AudioPlayer({
 
   return (
     <div className="bg-white/5 rounded-lg p-6 border border-white/10">
-      <audio
+<audio
         ref={audioRef}
-        src={actualAudioSrc}
+        src={actualAudioSrc || undefined}
         preload="metadata"
         playsInline
       />
