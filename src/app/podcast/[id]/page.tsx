@@ -9,6 +9,8 @@ import PodcastTutor from '@/components/PodcastTutor';
 import Navigation from '@/components/Navigation';
 import UploadModal from '@/components/UploadModal';
 import ScrollingTitle from '@/components/ScrollingTitle';
+import CosmicBackground from '@/components/CosmicBackground';
+import GlassCard from '@/components/GlassCard';
 
 interface PodcastData {
   podcast: {
@@ -101,10 +103,10 @@ export default function PodcastPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen cosmic-container flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading podcast...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto mb-4"></div>
+          <p className="text-gray-300">Loading podcast...</p>
         </div>
       </div>
     );
@@ -112,10 +114,10 @@ export default function PodcastPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen cosmic-container flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Podcast not found</h1>
-          <p className="text-gray-600">The requested podcast could not be loaded.</p>
+          <h1 className="text-2xl font-bold text-white mb-2">Podcast not found</h1>
+          <p className="text-gray-300">The requested podcast could not be loaded.</p>
         </div>
       </div>
     );
@@ -124,17 +126,19 @@ export default function PodcastPage() {
   const languageFlag = data.podcast.language === 'spanish' ? '🇪🇸' : '🇷🇺';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen cosmic-container">
+      <CosmicBackground />
+      <div className="relative z-10">
       <Navigation onUploadClick={() => setShowUploadModal(true)} />
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <GlassCard className="p-6 mb-8">
           <div className="flex items-center space-x-3 mb-4">
             <span className="text-2xl flex-shrink-0">{languageFlag}</span>
             <div className="flex-1 min-w-0">
               <ScrollingTitle
                 text={data.podcast.title}
-                className="text-3xl font-bold text-gray-900"
+                className="text-3xl font-bold text-white"
                 speed={40}
                 pauseDuration={1500}
               />
@@ -152,18 +156,18 @@ export default function PodcastPage() {
             onSeekTo={handleSeekTo}
             onExplanationRequest={handleExplanationRequest}
           />
-        </div>
+        </GlassCard>
 
         {/* Content Tabs */}
-        <div className="bg-white rounded-xl shadow-lg">
-          <div className="border-b border-gray-200">
+        <GlassCard>
+          <div className="border-b border-white/20">
             <nav className="flex space-x-8 px-6">
               <button
                 onClick={() => setSelectedTab('lesson')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   selectedTab === 'lesson'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-purple-400 text-purple-300'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-white/30'
                 }`}
               >
                 Lesson Plan
@@ -172,8 +176,8 @@ export default function PodcastPage() {
                 onClick={() => setSelectedTab('transcript')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   selectedTab === 'transcript'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-purple-400 text-purple-300'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-white/30'
                 }`}
               >
                 Interactive Transcript
@@ -182,8 +186,8 @@ export default function PodcastPage() {
                 onClick={() => setSelectedTab('tutor')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
                   selectedTab === 'tutor'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-purple-400 text-purple-300'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-white/30'
                 }`}
               >
                 <div className="flex items-center space-x-2">
@@ -219,6 +223,7 @@ export default function PodcastPage() {
               />
             )}
           </div>
+        </GlassCard>
         </div>
       </div>
 

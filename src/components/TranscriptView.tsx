@@ -81,7 +81,7 @@ export default function TranscriptView({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-gray-600 mb-4">
+      <div className="text-sm text-gray-300 mb-4">
         Click on any segment to jump to that time in the audio. Use the &quot;Explain&quot; button for AI analysis of difficult segments.
       </div>
 
@@ -98,10 +98,10 @@ export default function TranscriptView({
               key={segment.id}
               className={`border rounded-lg p-4 transition-all duration-200 ${
                 isCurrent
-                  ? 'border-blue-500 bg-blue-50 shadow-md'
+                  ? 'border-purple-400 bg-purple-400/20 shadow-md'
                   : isSelected
-                  ? 'border-gray-400 bg-gray-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  ? 'border-white/40 bg-white/10'
+                  : 'border-white/20 hover:border-white/30 hover:bg-white/5'
               }`}
             >
               <div className="flex items-start justify-between">
@@ -109,18 +109,18 @@ export default function TranscriptView({
                   <div className="flex items-center mb-2">
                     <button
                       onClick={() => handleSegmentClick(segment)}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                      className="text-sm font-medium text-purple-300 hover:text-purple-100"
                     >
                       {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
                     </button>
                     {isCurrent && (
-                      <span className="ml-2 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      <span className="ml-2 px-2 py-1 text-xs font-medium bg-purple-400/20 text-purple-300 rounded-full">
                         Playing
                       </span>
                     )}
                   </div>
                   <p
-                    className={`text-gray-800 cursor-pointer transition-colors ${
+                    className={`text-white cursor-pointer transition-colors ${
                       isCurrent ? 'font-medium' : ''
                     }`}
                     onClick={() => handleSegmentClick(segment)}
@@ -133,7 +133,7 @@ export default function TranscriptView({
                   {explanation && (
                     <button
                       onClick={() => toggleExplanation(segment.id)}
-                      className="p-1 rounded-full bg-green-100 text-green-600 hover:bg-green-200"
+                      className="p-1 rounded-full bg-green-400/20 text-green-300 hover:bg-green-400/30"
                       title="View explanation"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,7 +145,7 @@ export default function TranscriptView({
                   <button
                     onClick={() => handleExplainSegment(segment)}
                     disabled={isLoading}
-                    className="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    className="px-3 py-1 text-xs font-medium text-purple-300 bg-purple-400/20 rounded-md hover:bg-purple-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                   >
                     {isLoading ? (
                       <>
@@ -168,19 +168,19 @@ export default function TranscriptView({
               </div>
 
               {explanation && isExpanded && (
-                <div className="mt-3 p-3 bg-green-50 rounded-md border-l-4 border-green-400">
+                <div className="mt-3 p-3 bg-green-400/10 rounded-md border-l-4 border-green-400">
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-sm font-medium text-green-800">AI Explanation</h4>
+                    <h4 className="text-sm font-medium text-green-300">AI Explanation</h4>
                     <button
                       onClick={() => toggleExplanation(segment.id)}
-                      className="text-green-600 hover:text-green-800"
+                      className="text-green-300 hover:text-green-100"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
-                  <div className="text-sm text-green-700 whitespace-pre-wrap">
+                  <div className="text-sm text-green-200 whitespace-pre-wrap">
                     {explanation.explanation}
                   </div>
                 </div>
@@ -192,7 +192,7 @@ export default function TranscriptView({
 
       {transcript.length === 0 && (
         <div className="text-center py-8">
-          <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+          <div className="mx-auto h-12 w-12 text-gray-300 mb-4">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -202,7 +202,7 @@ export default function TranscriptView({
               />
             </svg>
           </div>
-          <p className="text-gray-500">No transcript available</p>
+          <p className="text-gray-300">No transcript available</p>
           <p className="text-sm text-gray-400 mt-1">The podcast is still being processed.</p>
         </div>
       )}

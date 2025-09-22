@@ -404,7 +404,7 @@ export default function AudioPlayer({
   const currentSegment = getCurrentSegment();
 
   return (
-    <div className="bg-gray-50 rounded-lg p-6">
+    <div className="bg-white/5 rounded-lg p-6 border border-white/10">
       <audio
         ref={audioRef}
         src={actualAudioSrc}
@@ -413,17 +413,17 @@ export default function AudioPlayer({
       />
 
       {/* Offline Download Controls */}
-      <div className="mb-4 flex items-center justify-between p-3 bg-white rounded-lg border">
+      <div className="mb-4 flex items-center justify-between p-3 glass-card rounded-lg">
         <div className="flex items-center space-x-2">
           {isDownloaded ? (
             <>
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-green-400 rounded-full"></div>
               <span className="text-sm text-green-700 font-medium">Downloaded for offline use</span>
             </>
           ) : (
             <>
-              <div className="w-3 h-3 bg-gray-300 rounded-full"></div>
-              <span className="text-sm text-gray-600">Stream online</span>
+              <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+              <span className="text-sm text-gray-300">Stream online</span>
             </>
           )}
         </div>
@@ -431,34 +431,34 @@ export default function AudioPlayer({
         <div className="flex items-center space-x-2">
           {isDownloading ? (
             <div className="flex items-center space-x-2">
-              <div className="w-32 bg-gray-200 rounded-full h-2">
+              <div className="w-32 bg-white/10 rounded-full h-2">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-purple-400 to-blue-400 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${downloadProgress}%` }}
                 ></div>
               </div>
-              <span className="text-xs text-gray-500">{Math.round(downloadProgress)}%</span>
+              <span className="text-xs text-gray-300">{Math.round(downloadProgress)}%</span>
             </div>
           ) : (
             <div className="flex items-center space-x-2">
               {isDownloaded ? (
                 <button
                   onClick={handleRemoveOffline}
-                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                  className="px-3 py-1 text-xs bg-red-400/20 text-red-300 rounded hover:bg-red-400/30 transition-all"
                 >
                   Remove
                 </button>
               ) : (
                 <button
                   onClick={handleDownload}
-                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  className="cosmic-button px-3 py-1 text-xs rounded transition-all"
                 >
                   Download
                 </button>
               )}
               <button
                 onClick={() => offlineCleanup.markEpisodeAsListened(podcastId)}
-                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                className="px-3 py-1 text-xs bg-green-400/20 text-green-300 rounded hover:bg-green-400/30 transition-all"
                 title="Mark as listened (auto-removes download after 24h)"
               >
                 ✓ Listened
@@ -470,17 +470,17 @@ export default function AudioPlayer({
 
       {/* Current Segment Display */}
       {currentSegment && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-          <p className="text-gray-800 italic">&quot;{currentSegment.text}&quot;</p>
+        <div className="mb-4 p-4 bg-blue-400/10 rounded-lg border-l-4 border-blue-400">
+          <p className="text-white italic">&quot;{currentSegment.text}&quot;</p>
           <div className="mt-2 flex justify-between items-center">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-300">
               {formatTime(currentSegment.start_time)} - {formatTime(currentSegment.end_time)}
             </span>
             <div className="flex space-x-2">
               <button
                 onClick={handleExplainLast30Seconds}
                 disabled={isExplaining}
-                className="flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center px-3 py-1 text-xs font-medium text-blue-300 bg-blue-400/20 rounded-md hover:bg-blue-400/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isExplaining ? (
                   <>
@@ -502,7 +502,7 @@ export default function AudioPlayer({
               <button
                 onClick={handleTranslateCurrentSegment}
                 disabled={isTranslating}
-                className="flex items-center px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 rounded-md hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center px-3 py-1 text-xs font-medium text-purple-300 bg-purple-400/20 rounded-md hover:bg-purple-400/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isTranslating ? (
                   <>
@@ -528,7 +528,7 @@ export default function AudioPlayer({
 
       {/* AI Explanation Display */}
       {showExplanation && (
-        <div className="mb-4 p-4 bg-green-50 rounded-lg border-l-4 border-green-500">
+        <div className="mb-4 p-4 bg-green-400/10 rounded-lg border-l-4 border-green-400">
           <div className="flex justify-between items-start mb-2">
             <h4 className="font-medium text-green-800">AI Explanation</h4>
             <button
@@ -546,7 +546,7 @@ export default function AudioPlayer({
 
       {/* Translation Display */}
       {showTranslation && (
-        <div className="mb-4 p-4 bg-purple-50 rounded-lg border-l-4 border-purple-500">
+        <div className="mb-4 p-4 bg-purple-400/10 rounded-lg border-l-4 border-purple-400">
           <div className="flex justify-between items-start mb-2">
             <h4 className="font-medium text-purple-800">Translation</h4>
             <button
@@ -566,18 +566,29 @@ export default function AudioPlayer({
       <div className="space-y-4">
         {/* Progress Bar */}
         <div className="flex items-center space-x-3">
-          <span className="text-sm text-gray-500 min-w-[40px]">
+          <span className="text-sm text-gray-300 min-w-[40px]">
             {formatTime(currentTime)}
           </span>
-          <input
-            type="range"
-            min="0"
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-          />
-          <span className="text-sm text-gray-500 min-w-[40px]">
+          <div
+            className="progress-slider flex-1 h-2 rounded-lg bg-black/40"
+            style={{
+              '--progress-width': `${duration ? (currentTime / duration) * 100 : 0}%`
+            } as React.CSSProperties & { '--progress-width': string }}
+          >
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg transition-all duration-75"
+              style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+            ></div>
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              className="relative z-10 w-full h-full appearance-none cursor-pointer slider bg-transparent"
+            />
+          </div>
+          <span className="text-sm text-gray-300 min-w-[40px]">
             {formatTime(duration)}
           </span>
         </div>
@@ -604,7 +615,7 @@ export default function AudioPlayer({
                 onTimeUpdate(newTime);
               }
             }}
-            className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors"
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all text-gray-300 hover:text-white"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
@@ -613,7 +624,7 @@ export default function AudioPlayer({
 
           <button
             onClick={togglePlayPause}
-            className="p-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            className="cosmic-button p-3 rounded-full transition-all"
           >
             {isPlaying ? (
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -644,7 +655,7 @@ export default function AudioPlayer({
                 onTimeUpdate(newTime);
               }
             }}
-            className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors"
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all text-gray-300 hover:text-white"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" />
@@ -656,7 +667,7 @@ export default function AudioPlayer({
         <div className="flex items-center justify-center space-x-6">
           {/* Volume Control */}
           <div className="flex items-center space-x-2">
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 10H4a1 1 0 00-1 1v2a1 1 0 001 1h2l3.5 3.5a1 1 0 001.6-.8V6.3a1 1 0 00-1.6-.8L6 10z" />
             </svg>
             <input
@@ -666,7 +677,7 @@ export default function AudioPlayer({
               step="0.1"
               value={volume}
               onChange={handleVolumeChange}
-              className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="w-20 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
             />
           </div>
 
@@ -674,7 +685,7 @@ export default function AudioPlayer({
           <div className="relative speed-control">
             <button
               onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-              className="flex items-center space-x-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center space-x-1 px-3 py-1 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-all"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -684,13 +695,13 @@ export default function AudioPlayer({
 
             {/* Speed Menu */}
             {showSpeedMenu && (
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10">
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 glass-card rounded-lg shadow-lg py-1 z-10">
                 {speedOptions.map((speed) => (
                   <button
                     key={speed}
                     onClick={() => handleSpeedChange(speed)}
-                    className={`block w-full px-4 py-2 text-sm text-left hover:bg-gray-100 transition-colors ${
-                      speed === playbackSpeed ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                    className={`block w-full px-4 py-2 text-sm text-left text-gray-300 hover:text-white hover:bg-white/10 transition-all ${
+                      speed === playbackSpeed ? 'bg-purple-400/20 text-purple-300 font-medium' : 'text-gray-300'
                     }`}
                   >
                     {speed}x

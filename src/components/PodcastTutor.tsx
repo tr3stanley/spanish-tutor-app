@@ -119,23 +119,23 @@ export default function PodcastTutor({ podcastId, podcastTitle, language }: Podc
   };
 
   return (
-    <div className="flex flex-col h-[600px] bg-white rounded-lg border border-gray-200">
+    <div className="flex flex-col h-[600px] bg-white/5 rounded-lg border border-white/20 backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-blue-50">
+      <div className="flex items-center justify-between p-4 border-b border-white/20 bg-white/5">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 bg-purple-400/20 rounded-full flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </div>
           <div>
-            <h3 className="font-medium text-gray-900">Podcast Tutor</h3>
-            <p className="text-xs text-gray-600">Ask me anything about this episode</p>
+            <h3 className="font-medium text-white">Podcast Tutor</h3>
+            <p className="text-xs text-gray-300">Ask me anything about this episode</p>
           </div>
         </div>
         <button
           onClick={clearConversation}
-          className="px-3 py-1 text-xs font-medium text-gray-600 bg-white rounded-md border border-gray-300 hover:bg-gray-50"
+          className="px-3 py-1 text-xs font-medium text-gray-300 bg-white/10 rounded-md border border-white/20 hover:bg-white/20"
         >
           Clear Chat
         </button>
@@ -151,8 +151,8 @@ export default function PodcastTutor({ podcastId, podcastTitle, language }: Podc
             <div
               className={`max-w-[80%] rounded-lg p-3 ${
                 message.type === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-900'
+                  ? 'bg-purple-600/80 text-white'
+                  : 'bg-white/10 text-white'
               }`}
             >
               <div className="text-sm whitespace-pre-wrap">
@@ -160,7 +160,7 @@ export default function PodcastTutor({ podcastId, podcastTitle, language }: Podc
               </div>
               <div
                 className={`text-xs mt-1 ${
-                  message.type === 'user' ? 'text-blue-200' : 'text-gray-500'
+                  message.type === 'user' ? 'text-purple-200' : 'text-gray-300'
                 }`}
               >
                 {new Date(message.timestamp).toLocaleTimeString()}
@@ -170,14 +170,14 @@ export default function PodcastTutor({ podcastId, podcastTitle, language }: Podc
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-lg p-3">
+            <div className="bg-white/10 rounded-lg p-3">
               <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
-                <span className="text-xs text-gray-500">Tutor is thinking...</span>
+                <span className="text-xs text-gray-300">Tutor is thinking...</span>
               </div>
             </div>
           </div>
@@ -186,7 +186,7 @@ export default function PodcastTutor({ podcastId, podcastTitle, language }: Podc
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200">
+      <form onSubmit={handleSubmit} className="p-4 border-t border-white/20">
         <div className="flex items-end space-x-2">
           <div className="flex-1">
             <textarea
@@ -196,14 +196,14 @@ export default function PodcastTutor({ podcastId, podcastTitle, language }: Podc
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything about this podcast episode..."
               rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-gray-400"
               disabled={isLoading}
             />
           </div>
           <button
             type="submit"
             disabled={!inputMessage.trim() || isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            className="px-4 py-2 bg-purple-600/80 text-white rounded-lg hover:bg-purple-700/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

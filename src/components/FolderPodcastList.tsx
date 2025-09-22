@@ -167,7 +167,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setShowNewFolderInput(!showNewFolderInput)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className="cosmic-button px-4 py-2 rounded-lg transition-colors"
           >
             New Folder
           </button>
@@ -175,7 +175,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
           {selectedPodcasts.size > 0 && (
             <button
               onClick={() => setShowMoveModal(true)}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              className="cosmic-button bg-green-400/20 border-green-400/30 text-green-300 hover:bg-green-400/30 px-4 py-2 rounded-lg transition-colors"
             >
               Move Selected ({selectedPodcasts.size})
             </button>
@@ -185,7 +185,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
         {selectedPodcasts.size > 0 && (
           <button
             onClick={() => setSelectedPodcasts(new Set())}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-400 hover:text-gray-200"
           >
             Clear Selection
           </button>
@@ -194,7 +194,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
 
       {/* New Folder Input */}
       {showNewFolderInput && (
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-white/5 p-4 rounded-lg border border-white/10">
           <div className="flex items-center space-x-3">
             <input
               type="text"
@@ -206,7 +206,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
             />
             <button
               onClick={createFolder}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="cosmic-button px-4 py-2 rounded-lg transition-colors"
             >
               Create
             </button>
@@ -215,7 +215,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
                 setShowNewFolderInput(false);
                 setNewFolderName('');
               }}
-              className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+              className="bg-white/10 text-gray-300 px-4 py-2 rounded-lg hover:bg-white/20 transition-colors"
             >
               Cancel
             </button>
@@ -229,15 +229,15 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
         const isExpanded = expandedFolders.has(folder.id);
 
         return (
-          <div key={folder.id} className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div key={folder.id} className="glass-card rounded-lg">
             <div
-              className="p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
+              className="p-4 border-b border-white/20 cursor-pointer hover:bg-white/5 transition-all"
               onClick={() => toggleFolder(folder.id)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <svg
-                    className={`w-5 h-5 text-gray-500 transition-transform ${
+                    className={`w-5 h-5 text-gray-300 transition-transform ${
                       isExpanded ? 'rotate-90' : ''
                     }`}
                     fill="none"
@@ -249,8 +249,8 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
                   <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z" />
                   </svg>
-                  <h3 className="text-lg font-semibold text-gray-900">{folder.name}</h3>
-                  <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm">
+                  <h3 className="text-lg font-semibold text-white">{folder.name}</h3>
+                  <span className="bg-white/10 text-gray-300 px-2 py-1 rounded-full text-sm">
                     {folderPodcasts.length}
                   </span>
                 </div>
@@ -260,7 +260,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
             {isExpanded && (
               <div className="p-4">
                 {folderPodcasts.length === 0 ? (
-                  <p className="text-gray-500 italic">No podcasts in this folder</p>
+                  <p className="text-gray-400 italic">No podcasts in this folder</p>
                 ) : (
                   <div className="space-y-3">
                     {folderPodcasts.map((podcast) => (
@@ -283,14 +283,14 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
 
       {/* Unfiled Podcasts */}
       {unfiledPodcasts.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="glass-card rounded-lg">
           <div
-            className="p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
+            className="p-4 border-b border-white/20 cursor-pointer hover:bg-white/5 transition-all"
             onClick={() => setShowUnfiled(!showUnfiled)}
           >
             <div className="flex items-center space-x-3">
               <svg
-                className={`w-5 h-5 text-gray-500 transition-transform ${
+                className={`w-5 h-5 text-gray-300 transition-transform ${
                   showUnfiled ? 'rotate-90' : ''
                 }`}
                 fill="none"
@@ -299,11 +299,11 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <h3 className="text-lg font-semibold text-gray-900">Unfiled</h3>
-              <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm">
+              <h3 className="text-lg font-semibold text-white">Unfiled</h3>
+              <span className="bg-white/10 text-gray-300 px-2 py-1 rounded-full text-sm">
                 {unfiledPodcasts.length}
               </span>
             </div>
@@ -330,14 +330,14 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
 
       {/* Move Modal */}
       {showMoveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="glass-card rounded-xl max-w-md w-full">
             <div className="p-6">
               <h3 className="text-lg font-semibold mb-4">Move {selectedPodcasts.size} podcast(s) to:</h3>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 <button
                   onClick={() => moveSelectedPodcasts(null)}
-                  className="w-full text-left p-3 rounded-lg hover:bg-gray-100 border border-gray-200"
+                  className="w-full text-left p-3 rounded-lg hover:bg-white/10 border border-white/20 text-white"
                 >
                   📂 Unfiled
                 </button>
@@ -345,7 +345,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
                   <button
                     key={folder.id}
                     onClick={() => moveSelectedPodcasts(folder.id)}
-                    className="w-full text-left p-3 rounded-lg hover:bg-gray-100 border border-gray-200"
+                    className="w-full text-left p-3 rounded-lg hover:bg-white/10 border border-white/20 text-white"
                   >
                     📁 {folder.name}
                   </button>
@@ -354,7 +354,7 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={() => setShowMoveModal(false)}
-                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                  className="bg-white/10 text-gray-300 px-4 py-2 rounded-lg hover:bg-white/20 transition-colors"
                 >
                   Cancel
                 </button>
@@ -384,7 +384,7 @@ function PodcastItem({
 
   return (
     <div className={`flex items-center p-3 rounded-lg border ${
-      isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+      isSelected ? 'border-purple-400 bg-purple-400/20' : 'border-white/20 hover:bg-white/10'
     }`}>
       <input
         type="checkbox"
@@ -398,11 +398,11 @@ function PodcastItem({
           <span className="text-sm">{languageFlag}</span>
           <Link
             href={`/podcast/${podcast.id}`}
-            className="font-medium text-gray-900 hover:text-blue-600 flex-1 min-w-0"
+            className="font-medium text-white hover:text-purple-300 flex-1 min-w-0"
           >
             <ScrollingTitle
               text={podcast.title}
-              className="font-medium text-gray-900 hover:text-blue-600"
+              className="font-medium text-white hover:text-purple-300"
             />
           </Link>
           {podcast.listened && (
@@ -410,7 +410,7 @@ function PodcastItem({
           )}
         </div>
 
-        <div className="flex items-center space-x-4 text-sm text-gray-500">
+        <div className="flex items-center space-x-4 text-sm text-gray-400">
           <span>{new Date(podcast.created_at).toLocaleDateString()}</span>
           {podcast.has_lesson ? (
             <span className="text-green-600 font-medium">✓ Ready</span>
@@ -426,7 +426,7 @@ function PodcastItem({
           className={`p-2 rounded-lg transition-colors ${
             podcast.listened
               ? 'bg-green-100 text-green-700 hover:bg-green-200'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-white/10 text-gray-300 hover:bg-white/20'
           }`}
           title={podcast.listened ? 'Mark as unlistened' : 'Mark as listened'}
         >
@@ -435,7 +435,7 @@ function PodcastItem({
 
         <button
           onClick={onDelete}
-          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+          className="p-2 text-red-400 hover:bg-red-400/20 rounded-lg transition-colors"
           title="Delete podcast"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

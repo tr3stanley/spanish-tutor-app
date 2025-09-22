@@ -87,34 +87,34 @@ export default function DownloadManager() {
   }
 
   return (
-    <div className="p-4 bg-white rounded-lg shadow">
+    <div className="p-4 glass-card">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Downloaded Episodes</h3>
+        <h3 className="text-lg font-semibold text-white">Downloaded Episodes</h3>
         <button
           onClick={() => setShowDetails(!showDetails)}
-          className="text-blue-600 hover:text-blue-800 text-sm"
+          className="text-purple-300 hover:text-purple-100 text-sm transition-colors"
         >
           {showDetails ? 'Hide Details' : 'Show Details'}
         </button>
       </div>
 
       {/* Storage Summary */}
-      <div className="mb-4 p-3 bg-gray-50 rounded">
+      <div className="mb-4 p-3 bg-white/5 rounded border border-white/10">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-300">
             {downloads.length} episodes • {formatFileSize(totalDownloadSize)}
           </span>
           {storageInfo && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-400">
               {formatFileSize(storageInfo.available)} available
             </span>
           )}
         </div>
 
         {storageInfo && storageInfo.total > 0 && (
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-white/10 rounded-full h-2">
             <div
-              className="bg-blue-600 h-2 rounded-full"
+              className="bg-gradient-to-r from-purple-400 to-blue-400 h-2 rounded-full"
               style={{ width: `${(storageInfo.used / storageInfo.total) * 100}%` }}
             ></div>
           </div>
@@ -126,13 +126,13 @@ export default function DownloadManager() {
         <div className="flex gap-2 mb-4">
           <button
             onClick={cleanupOld}
-            className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm hover:bg-yellow-200"
+            className="px-3 py-1 bg-yellow-400/20 text-yellow-300 rounded text-sm hover:bg-yellow-400/30 transition-all"
           >
             Cleanup Old
           </button>
           <button
             onClick={clearAllDownloads}
-            className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200"
+            className="px-3 py-1 bg-red-400/20 text-red-300 rounded text-sm hover:bg-red-400/30 transition-all"
           >
             Clear All
           </button>
@@ -141,7 +141,7 @@ export default function DownloadManager() {
 
       {/* Downloaded Episodes List */}
       {downloads.length === 0 ? (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-gray-400 text-center py-8">
           No episodes downloaded yet.<br />
           <span className="text-sm">Download episodes for offline listening when you have good internet.</span>
         </p>
@@ -150,17 +150,17 @@ export default function DownloadManager() {
           {downloads.map((episode) => (
             <div
               key={episode.id}
-              className="flex items-center justify-between p-3 border rounded hover:bg-gray-50"
+              className="flex items-center justify-between p-3 border border-white/10 rounded hover:bg-white/5 transition-all"
             >
               <div className="flex-1 min-w-0">
                 <ScrollingTitle
                   text={episode.title}
-                  className="font-medium text-sm"
+                  className="font-medium text-sm text-white"
                   speed={25}
                   pauseDuration={800}
                 />
                 {showDetails && (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-gray-400 mt-1">
                     Downloaded: {new Date(episode.downloadedAt).toLocaleDateString()}
                     {' • '}
                     Size: {formatFileSize(episode.fileSize)}
@@ -169,12 +169,12 @@ export default function DownloadManager() {
               </div>
 
               <div className="flex items-center gap-2 ml-2">
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-400/20 text-green-300">
                   Offline
                 </span>
                 <button
                   onClick={() => removeDownload(episode.id)}
-                  className="text-red-600 hover:text-red-800 text-sm p-1"
+                  className="text-red-400 hover:text-red-300 text-sm p-1 transition-colors"
                   title="Remove download"
                 >
                   ✕
@@ -187,7 +187,7 @@ export default function DownloadManager() {
 
       {/* Storage Tips */}
       {showDetails && (
-        <div className="mt-4 p-3 bg-blue-50 rounded text-sm text-blue-800">
+        <div className="mt-4 p-3 bg-blue-400/10 rounded text-sm text-blue-300 border border-blue-400/20">
           <strong>Storage Tips:</strong>
           <ul className="mt-1 space-y-1 text-xs">
             <li>• Episodes auto-delete after 30 days</li>
