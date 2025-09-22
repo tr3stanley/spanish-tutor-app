@@ -142,6 +142,7 @@ body {
   box-shadow: 0 0 12px rgba(159, 122, 234, 0.8);
   cursor: pointer;
   transition: all 0.2s ease;
+  margin-top: -6px;
 }
 
 .slider::-webkit-slider-thumb:hover {
@@ -164,6 +165,7 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 0 12px rgba(159, 122, 234, 0.8);
   cursor: pointer;
+  margin-top: -6px;
 }
 
 /* Progress-filled slider */
