@@ -69,10 +69,6 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-white mb-4 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
             Podcast Tutor
           </h1>
-          <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-            AI-powered Spanish and Russian podcast lessons with interactive transcripts,
-            grammar explanations, and personalized tutoring.
-          </p>
         </div>
 
         {/* Statistics Cards */}
