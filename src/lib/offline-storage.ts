@@ -65,8 +65,13 @@ class OfflineStorageManager {
         await this.cleanupOldEpisodes();
       }
 
-      // Download audio data
-      const response = await fetch(audioUrl);
+      // Download audio data using proxy for GitHub URLs to avoid CORS issues
+      const shouldUseProxy = audioUrl.includes('github.com') || audioUrl.includes('githubusercontent.com');
+      const fetchUrl = shouldUseProxy
+        ? `/api/audio-proxy-edge?url=${encodeURIComponent(audioUrl)}&t=${Date.now()}`
+        : audioUrl;
+
+      const response = await fetch(fetchUrl);
       if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
 
       const contentLength = parseInt(response.headers.get('content-length') || '0');
