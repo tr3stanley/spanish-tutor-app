@@ -81,6 +81,7 @@ class OfflineStorageManager {
 
       const chunks: Uint8Array[] = [];
       let receivedLength = 0;
+      let progressReported = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -89,9 +90,23 @@ class OfflineStorageManager {
         chunks.push(value);
         receivedLength += value.length;
 
-        if (onProgress && contentLength > 0) {
-          onProgress((receivedLength / contentLength) * 100);
+        if (onProgress) {
+          if (contentLength > 0) {
+            // Normal progress tracking with known content length
+            onProgress((receivedLength / contentLength) * 100);
+            progressReported = true;
+          } else {
+            // For requests without content-length, show estimated progress
+            // Update progress based on received data (estimate for typical podcast files)
+            const estimatedProgress = Math.min(95, (receivedLength / (8 * 1024 * 1024)) * 100); // Assume ~8MB files
+            onProgress(Math.max(5, estimatedProgress)); // Always show at least 5% progress
+          }
         }
+      }
+
+      // Ensure we show 100% when download is complete
+      if (onProgress && !progressReported) {
+        onProgress(100);
       }
 
       // Combine chunks into ArrayBuffer
