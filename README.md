@@ -4,7 +4,7 @@ An AI-powered language learning app that transforms podcasts into interactive le
 
 ## Features
 
-- 🎧 **Local Audio Processing** - Upload MP3/WAV files or download from YouTube
+- 🎧 **Flexible Audio Input** - Upload MP3/WAV files directly or from URLs (Internet Archive)
 - 🤖 **Private AI Transcription** - Uses local Whisper AI (completely offline)
 - 📚 **Smart Lesson Generation** - AI creates vocabulary lists, grammar explanations, and summaries
 - ⏯️ **Interactive Audio Player** - Synced transcript with clickable segments
@@ -55,12 +55,20 @@ Visit http://localhost:3000 to start learning!
 
 ## How It Works
 
-1. **Upload** - Drop an audio file or paste a YouTube URL
-2. **Transcribe** - Local Whisper AI converts speech to text (private)
-3. **Host** - Upload audio files to Archive.org for Safari compatibility
-4. **Learn** - AI generates vocabulary, grammar notes, and summaries
-5. **Study** - Interactive transcript with translations and AI tutoring
-6. **Organize** - Create folders and track listening progress
+1. **Upload** - Upload files directly or provide URLs from Internet Archive
+2. **Transcribe** - Local Whisper AI converts speech to text (completely private)
+3. **Learn** - AI generates vocabulary, grammar notes, and summaries
+4. **Study** - Interactive transcript with translations and AI tutoring
+5. **Organize** - Create folders and track listening progress
+6. **Download** - Save episodes offline for study anywhere
+
+## Adding Content
+
+The app supports two upload methods:
+- **File Upload**: Drag & drop MP3/WAV files directly from your computer
+- **URL Upload**: Provide direct links to audio files (recommended for Internet Archive)
+
+📖 **For complete upload instructions and best practices, see [instructions.md](./instructions.md)**
 
 ## Privacy & Security
 

@@ -2,8 +2,53 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
+import https from 'https';
+import http from 'http';
 
 const execAsync = promisify(exec);
+
+async function downloadFile(url: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https:') ? https : http;
+
+    const request = client.get(url, (response) => {
+      // Handle redirects
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        if (response.headers.location) {
+          downloadFile(response.headers.location, outputPath)
+            .then(resolve)
+            .catch(reject);
+          return;
+        }
+      }
+
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: ${response.statusCode} ${response.statusMessage}`));
+        return;
+      }
+
+      const writeStream = require('fs').createWriteStream(outputPath);
+      response.pipe(writeStream);
+
+      writeStream.on('finish', () => {
+        writeStream.close();
+        resolve();
+      });
+
+      writeStream.on('error', reject);
+    });
+
+    request.on('error', reject);
+    request.setTimeout(30000, () => {
+      request.destroy();
+      reject(new Error('Download timeout'));
+    });
+  });
+}
+
+function isUrl(path: string): boolean {
+  return path.startsWith('http://') || path.startsWith('https://');
+}
 
 export interface TranscriptSegment {
   text: string;
@@ -102,16 +147,54 @@ export async function transcribeAudio(
 }
 
 export async function processAudioWithWhisper(
-  audioFilePath: string,
+  audioPathOrUrl: string,
   language: 'spanish' | 'russian'
 ): Promise<TranscriptSegment[]> {
   console.log('Starting local Whisper processing...');
 
-  const segments = await transcribeAudio(audioFilePath, language);
+  let actualAudioPath = audioPathOrUrl;
+  let tempFilePath: string | null = null;
 
-  if (segments.length === 0) {
-    throw new Error('No transcript segments were generated');
+  try {
+    // If it's a URL, download it first
+    if (isUrl(audioPathOrUrl)) {
+      console.log(`Downloading audio from URL: ${audioPathOrUrl}`);
+
+      // Create temporary downloads directory
+      const downloadsDir = path.join(process.cwd(), 'temp-downloads');
+      await fs.mkdir(downloadsDir, { recursive: true });
+
+      // Generate temporary file path
+      const urlPath = new URL(audioPathOrUrl).pathname;
+      const extension = path.extname(urlPath) || '.mp3';
+      const filename = `temp-${Date.now()}${extension}`;
+      tempFilePath = path.join(downloadsDir, filename);
+
+      // Download the file
+      await downloadFile(audioPathOrUrl, tempFilePath);
+      actualAudioPath = tempFilePath;
+
+      console.log(`Audio downloaded to: ${tempFilePath}`);
+    }
+
+    // Process with Whisper
+    const segments = await transcribeAudio(actualAudioPath, language);
+
+    if (segments.length === 0) {
+      throw new Error('No transcript segments were generated');
+    }
+
+    return segments;
+
+  } finally {
+    // Clean up temporary file if we downloaded one
+    if (tempFilePath) {
+      try {
+        await fs.unlink(tempFilePath);
+        console.log(`Cleaned up temporary file: ${tempFilePath}`);
+      } catch (error) {
+        console.warn(`Failed to clean up temporary file: ${tempFilePath}`, error);
+      }
+    }
   }
-
-  return segments;
 }

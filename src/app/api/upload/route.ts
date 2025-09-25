@@ -7,29 +7,58 @@ import { generateLessonPlan } from '@/lib/ai';
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const language = formData.get('language') as 'spanish' | 'russian';
-    const title = formData.get('title') as string;
+    const contentType = request.headers.get('content-type') || '';
 
-    if (!file || !language || !title) {
-      return NextResponse.json(
-        { error: 'Missing required fields: file, language, title' },
-        { status: 400 }
-      );
+    let file: File | null = null;
+    let audioUrl: string | null = null;
+    let language: 'spanish' | 'russian';
+    let title: string;
+    let filename: string;
+    let filepath: string;
+
+    if (contentType.includes('multipart/form-data')) {
+      // File upload
+      const formData = await request.formData();
+      file = formData.get('file') as File;
+      language = formData.get('language') as 'spanish' | 'russian';
+      title = formData.get('title') as string;
+
+      if (!file || !language || !title) {
+        return NextResponse.json(
+          { error: 'Missing required fields: file, language, title' },
+          { status: 400 }
+        );
+      }
+
+      // Ensure uploads directory exists
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      await mkdir(uploadsDir, { recursive: true });
+
+      // Save the uploaded file
+      filename = `${Date.now()}-${file.name}`;
+      filepath = path.join(uploadsDir, filename);
+
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      await writeFile(filepath, buffer);
+    } else {
+      // URL upload
+      const body = await request.json();
+      audioUrl = body.audioUrl;
+      language = body.language;
+      title = body.title;
+
+      if (!audioUrl || !language || !title) {
+        return NextResponse.json(
+          { error: 'Missing required fields: audioUrl, language, title' },
+          { status: 400 }
+        );
+      }
+
+      // For URL uploads, we use the URL as the "filename" and set filepath to the URL
+      filename = audioUrl;
+      filepath = audioUrl;
     }
-
-    // Ensure uploads directory exists
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    await mkdir(uploadsDir, { recursive: true });
-
-    // Save the uploaded file
-    const filename = `${Date.now()}-${file.name}`;
-    const filepath = path.join(uploadsDir, filename);
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filepath, buffer);
 
     // Save to database
     const db = await getDatabase();
@@ -46,7 +75,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       podcastId,
-      message: 'Podcast uploaded successfully. Processing with Whisper...'
+      message: 'Podcast added successfully. Processing with Whisper...'
     });
 
   } catch (error) {

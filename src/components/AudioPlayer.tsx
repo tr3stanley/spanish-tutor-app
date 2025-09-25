@@ -141,7 +141,7 @@ export default function AudioPlayer({
 
   // Safari debugging and audio loading
   useEffect(() => {
-    if (audioRef.current && actualAudioSrc) {
+    if (audioRef.current && actualAudioSrc && actualAudioSrc !== '') {
       const audio = audioRef.current;
       const userIsSafari = typeof navigator !== 'undefined' && /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
 
@@ -150,18 +150,26 @@ export default function AudioPlayer({
       const handleCanPlay = () => console.log('Audio Debug: Can play');
       const handleError = (e: Event) => {
         const target = e.target as HTMLAudioElement;
-        console.error('Audio Debug: Audio error', {
-          error: target.error,
-          code: target.error?.code,
-          message: target.error?.message,
-          src: target.src,
-          originalSrc: audioSrc,
-          actualSrc: actualAudioSrc,
+        const errorInfo = {
+          errorCode: target.error?.code || 'unknown',
+          errorMessage: target.error?.message || 'No error message',
+          currentSrc: target.src || 'empty',
+          originalSrc: audioSrc || 'empty',
+          actualSrc: actualAudioSrc || 'empty',
           isOffline: isDownloaded,
           networkState: target.networkState,
           readyState: target.readyState,
-          userAgent: navigator.userAgent
-        });
+          hasActualSrc: Boolean(actualAudioSrc),
+          mediaError: target.error ? {
+            code: target.error.code,
+            message: target.error.message
+          } : null
+        };
+
+        // Only log if we have a meaningful source to debug
+        if (actualAudioSrc) {
+          console.error('Audio Debug: Load error', errorInfo);
+        }
       };
       const handleAbort = () => console.log('Audio Debug: Load aborted');
       const handleStalled = () => console.log('Audio Debug: Load stalled');
