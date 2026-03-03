@@ -15,7 +15,7 @@
     "fs": "^0.0.1-security",
     "googleapis": "^160.0.0",
     "multer": "^2.0.2",
-    "next": "15.5.3",
+    "next": "15.5.12",
     "node-id3": "^0.2.9",
     "openai": "^5.22.0",
     "path": "^0.12.7",
@@ -33,7 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.3",
+    "eslint-config-next": "15.5.12",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
