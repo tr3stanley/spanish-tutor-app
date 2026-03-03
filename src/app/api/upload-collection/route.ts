@@ -46,16 +46,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Start background processing for all files
-    files.forEach((file, index) => {
-      const podcastId = podcastIds[index];
-      const title = file.title || file.name.replace(/\.[^/.]+$/, '');
-      const fullTitle = files.length === 1 ? baseTitle : `${baseTitle} - ${title}`;
-
-      if (podcastId) {
-        processInBackground(podcastId, file.url, fullTitle, language);
-      }
-    });
+    // Start background processing in batches
+    processBatchInBackground(files, podcastIds, baseTitle, language);
 
     return NextResponse.json({
       success: true,
@@ -71,6 +63,45 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function processBatchInBackground(
+  files: CollectionFile[],
+  podcastIds: number[],
+  baseTitle: string,
+  language: 'spanish' | 'russian'
+) {
+  const BATCH_SIZE = 5; // Process 5 files at a time
+
+  for (let i = 0; i < files.length; i += BATCH_SIZE) {
+    const batch = files.slice(i, i + BATCH_SIZE);
+    const batchIds = podcastIds.slice(i, i + BATCH_SIZE);
+
+    console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(files.length / BATCH_SIZE)}`);
+
+    // Process batch in parallel
+    const promises = batch.map((file, index) => {
+      const podcastId = batchIds[index];
+      const title = file.title || file.name.replace(/\.[^/.]+$/, '');
+      const fullTitle = files.length === 1 ? baseTitle : `${baseTitle} - ${title}`;
+
+      if (podcastId) {
+        return processInBackground(podcastId, file.url, fullTitle, language);
+      }
+      return Promise.resolve();
+    });
+
+    // Wait for batch to complete before starting next batch
+    await Promise.allSettled(promises);
+
+    // Small delay between batches to avoid overwhelming the system
+    if (i + BATCH_SIZE < files.length) {
+      console.log('Waiting 2 seconds before next batch...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+
+  console.log('All batches completed!');
 }
 
 async function processInBackground(

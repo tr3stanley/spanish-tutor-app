@@ -7,7 +7,25 @@ import http from 'http';
 
 const execAsync = promisify(exec);
 
-async function downloadFile(url: string, outputPath: string): Promise<void> {
+async function downloadFile(url: string, outputPath: string, retries = 3): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await downloadFileAttempt(url, outputPath);
+      return; // Success
+    } catch (error: any) {
+      console.log(`Download attempt ${attempt}/${retries} failed: ${error.message}`);
+      if (attempt === retries) {
+        throw error; // Final attempt failed
+      }
+      // Wait before retrying (exponential backoff)
+      const waitTime = attempt * 2000; // 2s, 4s, 6s
+      console.log(`Waiting ${waitTime / 1000}s before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+}
+
+async function downloadFileAttempt(url: string, outputPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https:') ? https : http;
 
@@ -15,7 +33,7 @@ async function downloadFile(url: string, outputPath: string): Promise<void> {
       // Handle redirects
       if (response.statusCode === 301 || response.statusCode === 302) {
         if (response.headers.location) {
-          downloadFile(response.headers.location, outputPath)
+          downloadFileAttempt(response.headers.location, outputPath)
             .then(resolve)
             .catch(reject);
           return;
@@ -39,7 +57,7 @@ async function downloadFile(url: string, outputPath: string): Promise<void> {
     });
 
     request.on('error', reject);
-    request.setTimeout(30000, () => {
+    request.setTimeout(240000, () => {  // 4 minutes timeout
       request.destroy();
       reject(new Error('Download timeout'));
     });
@@ -71,6 +89,27 @@ export async function transcribeAudio(
     const outputDir = path.join(process.cwd(), 'transcripts');
     await fs.mkdir(outputDir, { recursive: true });
 
+    // Check if file needs conversion (m4a to wav)
+    let processedAudioPath = audioFilePath;
+    const fileExt = path.extname(audioFilePath).toLowerCase();
+
+    if (fileExt === '.m4a') {
+      console.log('Converting m4a to wav for Whisper...');
+      const wavPath = audioFilePath.replace(/\.m4a$/i, '.wav');
+
+      // Use ffmpeg to convert m4a to wav
+      const convertCommand = `ffmpeg -i "${audioFilePath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" -y`;
+
+      try {
+        await execAsync(convertCommand);
+        processedAudioPath = wavPath;
+        console.log('Audio conversion complete');
+      } catch (error) {
+        console.error('FFmpeg conversion failed:', error);
+        throw new Error('Failed to convert audio format');
+      }
+    }
+
     // Generate output filename
     const audioFilename = path.basename(audioFilePath, path.extname(audioFilePath));
     const outputBase = path.join(outputDir, `${audioFilename}-${Date.now()}`);
@@ -85,7 +124,7 @@ export async function transcribeAudio(
       '--output-json',
       `--output-file "${outputBase}"`,
       '--no-prints',
-      `"${audioFilePath}"`
+      `"${processedAudioPath}"`
     ].join(' ');
 
     console.log('Running Whisper transcription...');
@@ -133,6 +172,12 @@ export async function transcribeAudio(
     try {
       await fs.unlink(jsonFile);
       await fs.unlink(`${outputBase}.srt`);
+
+      // Clean up converted wav file if we created one
+      if (fileExt === '.m4a' && processedAudioPath !== audioFilePath) {
+        await fs.unlink(processedAudioPath);
+        console.log('Cleaned up converted wav file');
+      }
     } catch (cleanupError) {
       console.log('Note: Could not clean up some temporary files');
     }

@@ -45,3 +45,11 @@ models/
 uploads/
 *.db
 *.sqlite
+
+# Large media files (stored on Archive.org)
+/podcast-downloads/
+/temp-downloads/
+*.wav
+*.m4a
+*.mp3
+*.mp4
