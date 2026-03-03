@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
+    "vercel-build": "pnpm install --ignore-scripts=false && next build --turbopack",
     "start": "next start",
     "lint": "eslint"
   },

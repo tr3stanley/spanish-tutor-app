@@ -1,0 +1,7 @@
+{
+  "buildCommand": "pnpm vercel-build",
+  "installCommand": "pnpm install --ignore-scripts=false",
+  "env": {
+    "SKIP_ENV_VALIDATION": "true"
+  }
+}
