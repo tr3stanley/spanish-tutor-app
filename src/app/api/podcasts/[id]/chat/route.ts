@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 import { callOpenRouter } from '@/lib/ai';
 
 interface ConversationMessage {
@@ -23,13 +23,13 @@ export async function POST(
       );
     }
 
-    const db = await getDatabase();
+    const supabase = getSupabase();
 
-    // Get podcast information
-    const podcast = await db.get(
-      'SELECT title, language FROM podcasts WHERE id = ?',
-      [podcastId]
-    );
+    const { data: podcast } = await supabase
+      .from('episodes')
+      .select('title, language')
+      .eq('id', podcastId)
+      .maybeSingle();
 
     if (!podcast) {
       return NextResponse.json(
@@ -38,11 +38,11 @@ export async function POST(
       );
     }
 
-    // Get the full transcript
-    const transcript = await db.all(
-      'SELECT text FROM transcripts WHERE podcast_id = ? ORDER BY start_time',
-      [podcastId]
-    );
+    const { data: transcript } = await supabase
+      .from('transcript_segments')
+      .select('text')
+      .eq('episode_id', podcastId)
+      .order('start_time');
 
     if (!transcript || transcript.length === 0) {
       return NextResponse.json(
@@ -51,11 +51,13 @@ export async function POST(
       );
     }
 
-    // Get lesson plan for additional context
-    const lesson = await db.get(
-      'SELECT summary, grammar_rules, vocabulary FROM lessons WHERE podcast_id = ?',
-      [podcastId]
-    );
+    const { data: lesson } = await supabase
+      .from('lessons')
+      .select('summary, grammar_rules, vocabulary')
+      .eq('episode_id', podcastId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     const fullTranscript = transcript.map(t => t.text).join(' ');
     const languageName = podcast.language === 'spanish' ? 'Spanish' : 'Russian';

@@ -1,7 +1,0 @@
-{
-  "buildCommand": "cd node_modules/better-sqlite3 && pnpm run install && cd ../sqlite3 && pnpm run install && cd ../.. && pnpm run build",
-  "installCommand": "pnpm install --ignore-scripts=false",
-  "env": {
-    "SKIP_ENV_VALIDATION": "true"
-  }
-}

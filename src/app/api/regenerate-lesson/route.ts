@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 import { generateLessonPlan } from '@/lib/ai';
 
 export async function POST(request: NextRequest) {
@@ -10,34 +10,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Podcast ID is required' }, { status: 400 });
     }
 
-    const db = await getDatabase();
+    const supabase = getSupabase();
 
-    // Get the transcript
-    const transcript = await db.all(
-      'SELECT text FROM transcripts WHERE podcast_id = ? ORDER BY start_time',
-      [podcastId]
-    );
+    const { data: transcript } = await supabase
+      .from('transcript_segments')
+      .select('text')
+      .eq('episode_id', podcastId)
+      .order('start_time');
 
     if (!transcript || transcript.length === 0) {
       return NextResponse.json({ error: 'No transcript found for this podcast' }, { status: 404 });
     }
 
-    // Get podcast language
-    const podcast = await db.get('SELECT language FROM podcasts WHERE id = ?', [podcastId]);
+    const { data: podcast } = await supabase
+      .from('episodes')
+      .select('language')
+      .eq('id', podcastId)
+      .maybeSingle();
     if (!podcast) {
       return NextResponse.json({ error: 'Podcast not found' }, { status: 404 });
     }
 
-    // Regenerate lesson plan
     const fullTranscript = transcript.map(t => t.text).join(' ');
     const lesson = await generateLessonPlan(fullTranscript, podcast.language);
 
-    // Update the lesson in database
-    await db.run(`
-      UPDATE lessons
-      SET summary = ?, grammar_rules = ?, vocabulary = ?
-      WHERE podcast_id = ?
-    `, [lesson.summary, lesson.grammarRules, lesson.vocabulary, podcastId]);
+    const { error } = await supabase
+      .from('lessons')
+      .update({
+        summary: lesson.summary,
+        grammar_rules: lesson.grammarRules,
+        vocabulary: lesson.vocabulary,
+      })
+      .eq('episode_id', podcastId);
+    if (error) throw error;
 
     return NextResponse.json({
       success: true,

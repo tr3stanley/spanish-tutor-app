@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 
 export async function POST(
   request: NextRequest,
@@ -7,25 +7,16 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const supabase = getSupabase();
 
-    // In production (Vercel), the database is read-only
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        { error: 'Podcast updates are disabled in production (read-only database)' },
-        { status: 403 }
-      );
-    }
+    const { data: podcast, error } = await supabase
+      .from('episodes')
+      .update({ listened: true })
+      .eq('id', parseInt(id))
+      .select()
+      .maybeSingle();
 
-    const db = await getDatabase();
-
-    // Mark podcast as listened
-    await db.run(
-      'UPDATE podcasts SET listened = 1 WHERE id = ?',
-      [parseInt(id)]
-    );
-
-    // Get the updated podcast
-    const podcast = await db.get('SELECT * FROM podcasts WHERE id = ?', [parseInt(id)]);
+    if (error) throw error;
 
     if (!podcast) {
       return NextResponse.json({ error: 'Podcast not found' }, { status: 404 });
@@ -36,14 +27,8 @@ export async function POST(
       podcast,
       message: 'Podcast marked as listened. Offline file will be auto-removed in 24 hours.'
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error marking podcast as listened:', error);
-    if (error.code === 'SQLITE_READONLY') {
-      return NextResponse.json(
-        { error: 'Database is read-only. Podcast management is only available in local development.' },
-        { status: 403 }
-      );
-    }
     return NextResponse.json(
       { error: 'Failed to mark podcast as listened' },
       { status: 500 }

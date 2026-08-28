@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 import { explainSegment } from '@/lib/ai';
 
 export async function POST(
@@ -18,29 +18,25 @@ export async function POST(
       );
     }
 
-    const db = await getDatabase();
+    const supabase = getSupabase();
 
-    // Check if we already have an explanation for this segment (only in development)
-    let existingExplanation = null;
-    try {
-      existingExplanation = await db.get(
-        'SELECT * FROM explanations WHERE podcast_id = ? AND start_time = ? AND end_time = ?',
-        [podcastId, startTime, endTime]
-      );
-    } catch (error) {
-      // Database might be read-only in production, continue without caching
-      console.log('Could not check for existing explanation (read-only database)');
-    }
+    const { data: existingExplanation } = await supabase
+      .from('explanations')
+      .select('explanation')
+      .eq('episode_id', podcastId)
+      .eq('start_time', startTime)
+      .eq('end_time', endTime)
+      .maybeSingle();
 
     if (existingExplanation) {
       return NextResponse.json({ explanation: existingExplanation.explanation });
     }
 
-    // Get the podcast language
-    const podcast = await db.get(
-      'SELECT language FROM podcasts WHERE id = ?',
-      [podcastId]
-    );
+    const { data: podcast } = await supabase
+      .from('episodes')
+      .select('language')
+      .eq('id', podcastId)
+      .maybeSingle();
 
     if (!podcast) {
       return NextResponse.json(
@@ -49,13 +45,16 @@ export async function POST(
       );
     }
 
-    // Get the transcript segments that overlap with the time range
-    const segments = await db.all(
-      'SELECT text FROM transcripts WHERE podcast_id = ? AND start_time < ? AND end_time > ? ORDER BY start_time',
-      [podcastId, endTime, startTime]
-    );
+    // Segments overlapping the requested time range
+    const { data: segments } = await supabase
+      .from('transcript_segments')
+      .select('text')
+      .eq('episode_id', podcastId)
+      .lt('start_time', endTime)
+      .gt('end_time', startTime)
+      .order('start_time');
 
-    if (segments.length === 0) {
+    if (!segments || segments.length === 0) {
       return NextResponse.json(
         { error: 'No transcript found for this time range' },
         { status: 404 }
@@ -65,36 +64,41 @@ export async function POST(
     const segmentText = segments.map(s => s.text).join(' ');
 
     // Get some context (30 seconds before and after)
-    const contextBefore = await db.all(
-      'SELECT text FROM transcripts WHERE podcast_id = ? AND start_time >= ? AND start_time < ? ORDER BY start_time',
-      [podcastId, Math.max(0, startTime - 30), startTime]
-    );
-
-    const contextAfter = await db.all(
-      'SELECT text FROM transcripts WHERE podcast_id = ? AND start_time > ? AND start_time <= ? ORDER BY start_time',
-      [podcastId, endTime, endTime + 30]
-    );
+    const [{ data: contextBefore }, { data: contextAfter }] = await Promise.all([
+      supabase
+        .from('transcript_segments')
+        .select('text')
+        .eq('episode_id', podcastId)
+        .gte('start_time', Math.max(0, startTime - 30))
+        .lt('start_time', startTime)
+        .order('start_time'),
+      supabase
+        .from('transcript_segments')
+        .select('text')
+        .eq('episode_id', podcastId)
+        .gt('start_time', endTime)
+        .lte('start_time', endTime + 30)
+        .order('start_time'),
+    ]);
 
     const context = [
-      ...contextBefore.map(s => s.text),
+      ...(contextBefore || []).map(s => s.text),
       '**[SEGMENT TO EXPLAIN]**',
       segmentText,
       '**[END SEGMENT]**',
-      ...contextAfter.map(s => s.text)
+      ...(contextAfter || []).map(s => s.text)
     ].join(' ');
 
-    // Generate explanation
     const explanation = await explainSegment(segmentText, podcast.language, context);
 
-    // Try to save explanation to database (only works in development)
-    try {
-      await db.run(
-        'INSERT INTO explanations (podcast_id, start_time, end_time, explanation) VALUES (?, ?, ?, ?)',
-        [podcastId, startTime, endTime, explanation]
-      );
-    } catch (error) {
-      // Database might be read-only in production, continue without saving
-      console.log('Could not save explanation (read-only database)');
+    const { error: insertError } = await supabase.from('explanations').insert({
+      episode_id: podcastId,
+      start_time: startTime,
+      end_time: endTime,
+      explanation,
+    });
+    if (insertError) {
+      console.log('Could not save explanation:', insertError.message);
     }
 
     return NextResponse.json({ explanation });

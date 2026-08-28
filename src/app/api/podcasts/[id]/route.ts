@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 import fs from 'fs/promises';
 
 export async function GET(
@@ -8,14 +8,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const db = await getDatabase();
+    const supabase = getSupabase();
     const podcastId = parseInt(id);
 
-    // Get podcast details
-    const podcast = await db.get(
-      'SELECT * FROM podcasts WHERE id = ?',
-      [podcastId]
-    );
+    const { data: podcast } = await supabase
+      .from('episodes')
+      .select('*')
+      .eq('id', podcastId)
+      .maybeSingle();
 
     if (!podcast) {
       return NextResponse.json(
@@ -24,29 +24,32 @@ export async function GET(
       );
     }
 
-    // Get transcript
-    const transcript = await db.all(
-      'SELECT * FROM transcripts WHERE podcast_id = ? ORDER BY start_time',
-      [podcastId]
-    );
-
-    // Get lesson
-    const lesson = await db.get(
-      'SELECT * FROM lessons WHERE podcast_id = ?',
-      [podcastId]
-    );
-
-    // Get explanations
-    const explanations = await db.all(
-      'SELECT * FROM explanations WHERE podcast_id = ? ORDER BY start_time',
-      [podcastId]
-    );
+    const [{ data: transcript }, { data: lesson }, { data: explanations }] =
+      await Promise.all([
+        supabase
+          .from('transcript_segments')
+          .select('*')
+          .eq('episode_id', podcastId)
+          .order('start_time'),
+        supabase
+          .from('lessons')
+          .select('*')
+          .eq('episode_id', podcastId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('explanations')
+          .select('*')
+          .eq('episode_id', podcastId)
+          .order('start_time'),
+      ]);
 
     return NextResponse.json({
       podcast,
-      transcript,
+      transcript: transcript || [],
       lesson,
-      explanations
+      explanations: explanations || []
     });
 
   } catch (error) {
@@ -64,14 +67,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const db = await getDatabase();
+    const supabase = getSupabase();
     const podcastId = parseInt(id);
 
-    // Get podcast file path before deleting
-    const podcast = await db.get(
-      'SELECT file_path FROM podcasts WHERE id = ?',
-      [podcastId]
-    );
+    const { data: podcast } = await supabase
+      .from('episodes')
+      .select('file_path')
+      .eq('id', podcastId)
+      .maybeSingle();
 
     if (!podcast) {
       return NextResponse.json(
@@ -80,22 +83,17 @@ export async function DELETE(
       );
     }
 
-    // Delete related data first (foreign key constraints)
-    await db.run('DELETE FROM explanations WHERE podcast_id = ?', [podcastId]);
-    await db.run('DELETE FROM lessons WHERE podcast_id = ?', [podcastId]);
-    await db.run('DELETE FROM transcripts WHERE podcast_id = ?', [podcastId]);
+    // Related rows cascade in Postgres
+    const { error } = await supabase.from('episodes').delete().eq('id', podcastId);
+    if (error) throw error;
 
-    // Delete the podcast record
-    await db.run('DELETE FROM podcasts WHERE id = ?', [podcastId]);
-
-    // Delete the audio file
+    // Delete the local audio file if there is one (file_path may be a URL)
     try {
-      if (podcast.file_path) {
+      if (podcast.file_path && !podcast.file_path.startsWith('http')) {
         await fs.unlink(podcast.file_path);
       }
     } catch (fileError) {
       console.log('Could not delete audio file:', fileError);
-      // Don't fail the request if file deletion fails
     }
 
     return NextResponse.json({ success: true });

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const db = await getDatabase();
-    const folders = await db.all('SELECT * FROM folders ORDER BY name');
+    const supabase = getSupabase();
+    const { data: folders, error } = await supabase
+      .from('folders')
+      .select('*')
+      .order('name');
+    if (error) throw error;
     return NextResponse.json({ folders });
   } catch (error) {
     console.error('Error fetching folders:', error);
@@ -23,31 +27,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
-    // In production (Vercel), the database is read-only, so folder creation is disabled
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        { error: 'Folder creation is disabled in production (read-only database)' },
-        { status: 403 }
-      );
+    const supabase = getSupabase();
+    const { data: folder, error } = await supabase
+      .from('folders')
+      .insert({ name: name.trim() })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json({ error: 'Folder name already exists' }, { status: 400 });
+      }
+      throw error;
     }
-
-    const db = await getDatabase();
-    const result = await db.run('INSERT INTO folders (name) VALUES (?)', [name.trim()]);
-
-    const folder = await db.get('SELECT * FROM folders WHERE id = ?', [result.lastID]);
 
     return NextResponse.json({ folder });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating folder:', error);
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return NextResponse.json({ error: 'Folder name already exists' }, { status: 400 });
-    }
-    if (error.code === 'SQLITE_READONLY') {
-      return NextResponse.json(
-        { error: 'Database is read-only. Folder creation is only available in local development.' },
-        { status: 403 }
-      );
-    }
     return NextResponse.json(
       { error: 'Failed to create folder' },
       { status: 500 }

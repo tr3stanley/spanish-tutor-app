@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/database';
+import { getSupabase } from '@/lib/supabase';
 
 export async function POST(
   request: NextRequest,
@@ -15,8 +15,12 @@ export async function POST(
     }
 
     // Get podcast info to determine source language
-    const db = await getDatabase();
-    const podcast = await db.get('SELECT language FROM podcasts WHERE id = ?', [podcastId]);
+    const supabase = getSupabase();
+    const { data: podcast } = await supabase
+      .from('episodes')
+      .select('language')
+      .eq('id', podcastId)
+      .maybeSingle();
 
     if (!podcast) {
       return NextResponse.json({ error: 'Podcast not found' }, { status: 404 });
