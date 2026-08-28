@@ -9,6 +9,7 @@ export async function GET() {
     const { data } = await supabase
       .from('tutor_messages')
       .select('id, role, content, kind, created_at')
+      .neq('kind', 'placement')
       .order('id', { ascending: false })
       .limit(50);
     return NextResponse.json({ messages: (data || []).reverse() });

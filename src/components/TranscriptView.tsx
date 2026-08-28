@@ -145,7 +145,7 @@ export default function TranscriptView({
                   <button
                     onClick={() => handleExplainSegment(segment)}
                     disabled={isLoading}
-                    className="px-3 py-1 text-xs font-medium text-purple-300 bg-purple-400/20 rounded-md hover:bg-purple-400/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    className="px-3 py-1 text-xs font-medium text-purple-100 bg-purple-500/30 border border-purple-400/40 rounded-md hover:bg-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                   >
                     {isLoading ? (
                       <>

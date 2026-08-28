@@ -510,7 +510,7 @@ export default function AudioPlayer({
               <button
                 onClick={handleTranslateCurrentSegment}
                 disabled={isTranslating}
-                className="flex items-center px-3 py-1 text-xs font-medium text-purple-300 bg-purple-400/20 rounded-md hover:bg-purple-400/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex items-center px-3 py-1 text-xs font-medium text-purple-100 bg-purple-500/30 border border-purple-400/40 rounded-md hover:bg-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isTranslating ? (
                   <>
@@ -538,17 +538,17 @@ export default function AudioPlayer({
       {showExplanation && (
         <div className="mb-4 p-4 bg-green-400/10 rounded-lg border-l-4 border-green-400">
           <div className="flex justify-between items-start mb-2">
-            <h4 className="font-medium text-green-800">AI Explanation</h4>
+            <h4 className="font-medium text-green-300">AI Explanation</h4>
             <button
               onClick={() => setShowExplanation(false)}
-              className="text-green-600 hover:text-green-800"
+              className="text-green-300 hover:text-green-100"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div className="text-sm text-green-700 whitespace-pre-wrap">{explanation}</div>
+          <div className="text-sm text-green-100 whitespace-pre-wrap">{explanation}</div>
         </div>
       )}
 
@@ -556,17 +556,17 @@ export default function AudioPlayer({
       {showTranslation && (
         <div className="mb-4 p-4 bg-purple-400/10 rounded-lg border-l-4 border-purple-400">
           <div className="flex justify-between items-start mb-2">
-            <h4 className="font-medium text-purple-800">Translation</h4>
+            <h4 className="font-medium text-purple-300">Translation</h4>
             <button
               onClick={() => setShowTranslation(false)}
-              className="text-purple-600 hover:text-purple-800"
+              className="text-purple-300 hover:text-purple-100"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div className="text-sm text-purple-700 whitespace-pre-wrap">{translation}</div>
+          <div className="text-sm text-purple-100 whitespace-pre-wrap">{translation}</div>
         </div>
       )}
 

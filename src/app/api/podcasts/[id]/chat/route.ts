@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, fetchAllRows } from '@/lib/supabase';
 import { callOpenRouter } from '@/lib/ai';
 
 interface ConversationMessage {
@@ -38,13 +38,16 @@ export async function POST(
       );
     }
 
-    const { data: transcript } = await supabase
-      .from('transcript_segments')
-      .select('text')
-      .eq('episode_id', podcastId)
-      .order('start_time');
+    const transcript = await fetchAllRows<{ text: string }>((from, to) =>
+      supabase
+        .from('transcript_segments')
+        .select('text')
+        .eq('episode_id', podcastId)
+        .order('start_time')
+        .range(from, to)
+    );
 
-    if (!transcript || transcript.length === 0) {
+    if (transcript.length === 0) {
       return NextResponse.json(
         { error: 'No transcript found for this podcast' },
         { status: 404 }

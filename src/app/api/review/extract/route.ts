@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, fetchAllRows } from '@/lib/supabase';
 import { callOpenRouterChat } from '@/lib/ai';
 
 const BATCH = 3; // episodes per call — the client calls repeatedly until remaining = 0
@@ -10,17 +10,17 @@ export async function POST() {
   try {
     const supabase = getSupabase();
 
-    const [{ data: listened }, { data: extracted }] = await Promise.all([
-      supabase
-        .from('episodes')
-        .select('id, title, cefr_level')
-        .eq('listened', true)
-        .order('id'),
-      supabase.from('vocabulary_items').select('episode_id'),
+    const [listened, extracted] = await Promise.all([
+      fetchAllRows<{ id: number; title: string; cefr_level: string | null }>((from, to) =>
+        supabase.from('episodes').select('id, title, cefr_level').eq('listened', true).order('id').range(from, to)
+      ),
+      fetchAllRows<{ episode_id: number }>((from, to) =>
+        supabase.from('vocabulary_items').select('episode_id').order('id').range(from, to)
+      ),
     ]);
 
-    const extractedIds = new Set((extracted || []).map(v => v.episode_id));
-    const pending = (listened || []).filter(e => !extractedIds.has(e.id));
+    const extractedIds = new Set(extracted.map(v => v.episode_id));
+    const pending = listened.filter(e => !extractedIds.has(e.id));
 
     if (pending.length === 0) {
       return NextResponse.json({ extracted: 0, remaining: 0, message: 'All listened episodes already have vocabulary.' });

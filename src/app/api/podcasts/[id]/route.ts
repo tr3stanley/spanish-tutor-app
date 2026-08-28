@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, fetchAllRows, TranscriptSegment } from '@/lib/supabase';
 import fs from 'fs/promises';
 
 export async function GET(
@@ -24,13 +24,16 @@ export async function GET(
       );
     }
 
-    const [{ data: transcript }, { data: lesson }, { data: explanations }] =
+    const [transcript, { data: lesson }, { data: explanations }] =
       await Promise.all([
-        supabase
-          .from('transcript_segments')
-          .select('*')
-          .eq('episode_id', podcastId)
-          .order('start_time'),
+        fetchAllRows<TranscriptSegment>((from, to) =>
+          supabase
+            .from('transcript_segments')
+            .select('*')
+            .eq('episode_id', podcastId)
+            .order('start_time')
+            .range(from, to)
+        ),
         supabase
           .from('lessons')
           .select('*')
@@ -47,7 +50,7 @@ export async function GET(
 
     return NextResponse.json({
       podcast,
-      transcript: transcript || [],
+      transcript,
       lesson,
       explanations: explanations || []
     });

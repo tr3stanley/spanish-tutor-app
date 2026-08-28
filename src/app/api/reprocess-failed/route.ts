@@ -7,19 +7,17 @@ export async function POST() {
     const supabase = getSupabase();
 
     // Episodes with no transcript segments = failed processing
-    const { data: withTranscripts } = await supabase
-      .from('transcript_segments')
-      .select('episode_id');
-    const transcribedIds = new Set((withTranscripts || []).map(t => t.episode_id));
-
-    const { data: episodes } = await supabase
-      .from('episodes')
-      .select('id, title, file_path, language')
-      .order('id');
-
-    const failedPodcasts = (episodes || []).filter(e => !transcribedIds.has(e.id));
+    const { data: failedPodcasts, error } = await supabase.rpc('episodes_missing_transcripts');
+    if (error) throw new Error(error.message);
 
     console.log(`Found ${failedPodcasts.length} podcasts to reprocess`);
+
+    if (failedPodcasts.length > 20) {
+      return NextResponse.json(
+        { error: `Refusing to reprocess ${failedPodcasts.length} episodes at once — that many missing transcripts almost certainly means a query bug, not failed processing.` },
+        { status: 500 }
+      );
+    }
 
     if (failedPodcasts.length === 0) {
       return NextResponse.json({

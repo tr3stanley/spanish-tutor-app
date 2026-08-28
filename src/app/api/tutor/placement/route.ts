@@ -37,6 +37,20 @@ export async function POST(request: NextRequest) {
         });
         if (error) throw error;
 
+        // Persist the interview transcript so it's auditable and the tutor
+        // can reference the student's actual errors later.
+        const closing = assessment.closing_message || '';
+        const transcriptRows = [
+          ...(history || []).map((m: ChatMessage) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            kind: 'placement',
+          })),
+          ...(closing ? [{ role: 'assistant' as const, content: closing, kind: 'placement' }] : []),
+        ];
+        const { error: saveError } = await supabase.from('tutor_messages').insert(transcriptRows);
+        if (saveError) console.error('Failed to save placement transcript:', saveError.message);
+
         return NextResponse.json({
           done: true,
           assessment,
