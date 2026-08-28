@@ -168,7 +168,7 @@ async function transcribeWithGroq(url) {
 
   try {
     await downloadWithRetry(url, rawPath);
-    await ffmpeg(['-i', rawPath, '-ar', '16000', '-ac', '1', '-c:a', 'libopus', '-b:a', '16k', oggPath, '-y']);
+    await ffmpeg(['-i', rawPath, '-vn', '-ar', '16000', '-ac', '1', '-c:a', 'libopus', '-b:a', '16k', oggPath, '-y']);
 
     const { size } = await stat(oggPath);
     if (size <= GROQ_MAX_BYTES) {
@@ -180,7 +180,7 @@ async function transcribeWithGroq(url) {
 
     // Long episode: split, transcribe each chunk, shift timestamps back into place
     const pattern = path.join(tmpDir, `sync-${stamp}-chunk%03d.ogg`);
-    await ffmpeg(['-i', oggPath, '-f', 'segment', '-segment_time', String(CHUNK_SECONDS),
+    await ffmpeg(['-i', oggPath, '-vn', '-f', 'segment', '-segment_time', String(CHUNK_SECONDS),
       '-ar', '16000', '-ac', '1', '-c:a', 'libopus', '-b:a', '16k', pattern, '-y']);
 
     const all = [];
