@@ -15,7 +15,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { XMLParser } from 'fast-xml-parser';
 import { readFileSync } from 'fs';
-import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
+import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises';
 import { execFile } from 'child_process';
 import path from 'path';
 
@@ -115,49 +115,89 @@ function parseCaptions(raw) {
   return segments;
 }
 
+const ffmpeg = args_ => new Promise((resolve, reject) => {
+  execFile('ffmpeg', args_, { maxBuffer: 10 * 1024 * 1024 }, err => (err ? reject(err) : resolve()));
+});
+
+async function downloadWithRetry(url, dest, attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'spanish-tutor-pipeline/1.0' } });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+      return;
+    } catch (e) {
+      if (i === attempts) throw new Error(`audio download failed after ${attempts} tries: ${e.message}`);
+      await new Promise(r => setTimeout(r, i * 3000));
+    }
+  }
+}
+
+async function postToGroq(filePath) {
+  const bytes = await readFile(filePath);
+  const fd = new FormData();
+  fd.append('model', 'whisper-large-v3-turbo');
+  fd.append('language', 'es');
+  fd.append('response_format', 'verbose_json');
+  fd.append('temperature', '0');
+  fd.append('file', new Blob([new Uint8Array(bytes)]), path.basename(filePath));
+
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${GROQ_KEY}` },
+    body: fd,
+  });
+  if (!res.ok) throw new Error(`Groq failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  return (await res.json()).segments || [];
+}
+
 // Groq's own URL fetcher doesn't follow podcast CDN redirects, so download the
-// audio and downsample it (16kHz mono FLAC) — smaller upload, same accuracy.
+// audio ourselves and re-encode to 16kHz mono Opus (~7MB/hour — Whisper
+// downsamples to 16kHz anyway, so nothing useful is lost). Episodes still over
+// the 25MB API limit are split into 45-minute chunks and stitched back together.
+const GROQ_MAX_BYTES = 24 * 1024 * 1024;
+const CHUNK_SECONDS = 45 * 60;
+
 async function transcribeWithGroq(url) {
   const tmpDir = path.join(ROOT, 'temp-downloads');
   await mkdir(tmpDir, { recursive: true });
   const stamp = Date.now();
   const rawPath = path.join(tmpDir, `sync-${stamp}${path.extname(new URL(url).pathname) || '.mp3'}`);
-  const flacPath = path.join(tmpDir, `sync-${stamp}.flac`);
+  const oggPath = path.join(tmpDir, `sync-${stamp}.ogg`);
+  const chunkPaths = [];
 
   try {
-    const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'spanish-tutor-pipeline/1.0' } });
-    if (!res.ok) throw new Error(`audio download failed: ${res.status}`);
-    await writeFile(rawPath, Buffer.from(await res.arrayBuffer()));
+    await downloadWithRetry(url, rawPath);
+    await ffmpeg(['-i', rawPath, '-ar', '16000', '-ac', '1', '-c:a', 'libopus', '-b:a', '16k', oggPath, '-y']);
 
-    await new Promise((resolve, reject) => {
-      execFile('ffmpeg', ['-i', rawPath, '-ar', '16000', '-ac', '1', '-c:a', 'flac', flacPath, '-y'],
-        err => (err ? reject(err) : resolve()));
-    });
-
-    const bytes = await readFile(flacPath);
-    if (bytes.length > 24 * 1024 * 1024) {
-      throw new Error(`audio too large for Groq (${(bytes.length / 1024 / 1024).toFixed(1)}MB)`);
+    const { size } = await stat(oggPath);
+    if (size <= GROQ_MAX_BYTES) {
+      const segments = await postToGroq(oggPath);
+      return segments
+        .map(s => ({ text: (s.text || '').trim(), start: s.start ?? 0, end: s.end ?? 0 }))
+        .filter(s => s.text && s.end > s.start);
     }
 
-    const fd = new FormData();
-    fd.append('model', 'whisper-large-v3-turbo');
-    fd.append('language', 'es');
-    fd.append('response_format', 'verbose_json');
-    fd.append('temperature', '0');
-    fd.append('file', new Blob([new Uint8Array(bytes)]), path.basename(flacPath));
+    // Long episode: split, transcribe each chunk, shift timestamps back into place
+    const pattern = path.join(tmpDir, `sync-${stamp}-chunk%03d.ogg`);
+    await ffmpeg(['-i', oggPath, '-f', 'segment', '-segment_time', String(CHUNK_SECONDS),
+      '-ar', '16000', '-ac', '1', '-c:a', 'libopus', '-b:a', '16k', pattern, '-y']);
 
-    const gres = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${GROQ_KEY}` },
-      body: fd,
-    });
-    if (!gres.ok) throw new Error(`Groq failed (${gres.status}): ${(await gres.text()).slice(0, 300)}`);
-    const data = await gres.json();
-    return (data.segments || [])
-      .map(s => ({ text: (s.text || '').trim(), start: s.start ?? 0, end: s.end ?? 0 }))
-      .filter(s => s.text && s.end > s.start);
+    const all = [];
+    for (let i = 0; ; i++) {
+      const chunk = path.join(tmpDir, `sync-${stamp}-chunk${String(i).padStart(3, '0')}.ogg`);
+      try { await stat(chunk); } catch { break; }
+      chunkPaths.push(chunk);
+      const offset = i * CHUNK_SECONDS;
+      const segments = await postToGroq(chunk);
+      all.push(...segments
+        .map(s => ({ text: (s.text || '').trim(), start: (s.start ?? 0) + offset, end: (s.end ?? 0) + offset }))
+        .filter(s => s.text && s.end > s.start));
+    }
+    console.log(`    (split into ${chunkPaths.length} chunks)`);
+    return all;
   } finally {
-    await Promise.allSettled([unlink(rawPath), unlink(flacPath)]);
+    await Promise.allSettled([unlink(rawPath), unlink(oggPath), ...chunkPaths.map(unlink)]);
   }
 }
 
