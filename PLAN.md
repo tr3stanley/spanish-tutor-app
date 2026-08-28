@@ -1,6 +1,6 @@
 # Spanish Tutor App — Improvement Plan
 
-_Last updated: 2026-08-27. Reference doc for the rebuild. Single user (Thomas), local-first, budget-minimized. May be marketed later — swap points noted at the bottom._
+_Last updated: 2026-08-28. Reference doc for the rebuild. Local-first, budget-minimized. Going multi-user soon (invite-only: Thomas + brother, sister, friend — all free). May be marketed later — swap points noted at the bottom._
 
 ## Decisions made
 
@@ -9,6 +9,9 @@ _Last updated: 2026-08-27. Reference doc for the rebuild. Single user (Thomas), 
 - **Database moves to a personal free-tier Supabase project** — NOT the "Iconic Web / Match Kicks" org (that's the paid client org; a project there costs $10/mo). Postbridge lives on the personal account and may be replaced/deleted — Thomas decides, confirm nothing uses it first.
 - **Ingestion stays local:** the Mac does downloads and whisper-cpp transcription for free; the cloud only stores results.
 - **Target dialects matter:** Costa Rican vs Mexican etc. should shape tutor language (voseo/ustedeo, vocabulary) and playback voice.
+- **Multi-user (decided 2026-08-28):** real accounts via Supabase Auth with an email allowlist — private, invite-only, free for family. Content stays shared within the group for now; every content row gets `owner_id` from day one so a marketed version can flip copyrighted items to owner-only without a rebuild.
+- **Music as a learning tool (decided 2026-08-28):** embed playback (Spotify/YouTube — legal, free), LLM lyric breakdowns for slang/culture. Complements, doesn't replace, conversation practice (lyrics are poetic register).
+- **Audiobooks over ebooks (decided 2026-08-28):** LibriVox (public domain, re-hostable) for classics; LLM graded stories + TTS for leveled audiobooks with perfect text sync — also fixes the A2/B2 content gap.
 
 ## Current state (audited 2026-08-27)
 
@@ -43,24 +46,36 @@ The core product. Cheap model (DeepSeek via OpenRouter) for volume work; better 
 - **Memory:** progress stored in Supabase so lessons build on each other; tutor sees listening history.
 
 ### Phase 4 — Voice input/output (~$0–2/month)
-- **Mic button** on the tutor chat: record → Whisper transcription (OpenAI $0.006/min, or Groq near-free, or Azure 5 free hrs/mo) → sends as text.
-- **Play button** on tutor replies: Azure neural TTS — free tier 500k chars/month, includes real **es-CR** and **es-MX** voices. Hear correct pronunciation in the target dialect for $0.
-- Caveat: turn-based (walkie-talkie feel), and nothing scores Thomas's own pronunciation — but the mic plumbing is exactly what the deferred Azure pronunciation grader plugs into.
+- **Mic button** on the tutor chat: record → Whisper transcription (Groq $0.04/hr — near-free, likely covered by Groq's free tier; OpenAI $0.006/min as fallback) → sends as text.
+- **Play button** on tutor replies: Azure neural TTS — free tier 500k chars/month, includes real **es-CR** and **es-MX** voices, chosen from the user's target dialect. Hear correct pronunciation for $0.
+- Caveat: turn-based (walkie-talkie feel), and nothing scores the student's own pronunciation — but the mic plumbing is exactly what the deferred Azure pronunciation grader plugs into.
 
-### Phase 5 — Automated podcast pipeline ($0)
-- Curated feed list by level (open RSS, full audio): Dreaming Spanish (A1–A2), Duolingo Podcast (B1, free transcripts), Cuéntame / Simple Stories (A2–B1), Español con Juan (B1–B2), Hoy Hablamos (B1–C1), No Hay Tos (B2+, Mexican, free transcripts via signup), Radio Ambulante (C1+, free transcripts). Skip paywalled News in Slow Spanish.
-- Discovery via free **Podcast Index API** (`podcastindex-org.github.io/docs-api`); prefer feeds exposing `podcast:transcript`.
-- Local script (successor to `download-rss-podcast.py`): fetch new episodes → publisher transcript if free, else local Whisper → level-tag → sync to Supabase.
-- Legal note (matters if marketed): personal-use downloading/transcribing of open feeds is fine; re-hosting audio or showing transcripts to other users is not.
+### Phase 5 — Music (~$0)
+- New "Music" section: add a song by name/artist or Spotify/YouTube link. **Playback via embeds only** (legal, free — audio plays through the licensed service; never host audio or serve full lyrics publicly).
+- Lyrics as text (pasted in, or fetched for personal use — Whisper is unreliable over music) → LLM study sheet: what the song is actually saying, line-by-line translation toggle, **slang glossary with region tags** ("chamba — Mexican, work"), cultural notes.
+- Song vocab feeds the existing SRS review queue like episodes do. Dialect tie-in: corridos/banda (es-MX), reggaeton (Caribbean), rock nacional (rioplatense).
+- One LLM call per song (~$0.01); reuses reader + vocab infrastructure.
 
-### Phase 6 — Ebooks ($0)
-- **Gutendex** (`gutendex.com/books?languages=es`) for public-domain Spanish books (skews C1+, older prose).
-- **Import my own EPUB:** EPUB = zipped HTML; extract text with JSZip, render with epub.js.
-- Chapter-level CEFR scoring with the same classifier; same click-to-translate reader as transcripts.
-- Optionally: LLM-generated/simplified graded stories at a chosen level (real graded readers aren't free).
+### Phase 6 — Multi-user (family, $0 infra)
+- **Supabase Auth** (free to 50k MAU) with an **email allowlist** table — only approved addresses can sign up. Private, non-commercial, invite-only.
+- Per-user everything personal: placement, course/syllabus, tutor memory, mistakes, SRS, listened-flags. Schema already has `user_id` everywhere — the work is real auth ids through the tutor/review routes + auth-scoped RLS replacing allow-all.
+- Content (episodes/transcripts/lessons) shared within the group for now; add `owner_id` to content tables immediately for the marketed-later flip.
+- Cost impact: LLM spend scales with active users (~$1–3/mo each). Supabase free tier still fine.
 
-### Phase 7 — Dialect packs ($0)
-- A settings layer: choosing "Costa Rican" switches tutor instructions (voseo, tico vocabulary, muletillas), TTS voice (es-CR), and content filtering. Same for Mexican (es-MX), etc.
+### Phase 7 — Automated podcast pipeline + cloud transcription ($0–2/mo)
+- Curated feed list by level to **fix the library's gaps** (current: A2 89, B1 634, B2 13, C1 3): Dreaming Spanish (A1–A2), Duolingo Podcast (B1, free transcripts), Cuéntame / Simple Stories (A2–B1), Español con Juan (B1–B2), Hoy Hablamos (B1–C1), No Hay Tos (B2+, Mexican), Radio Ambulante (C1+). Skip paywalled News in Slow Spanish.
+- Discovery via free **Podcast Index API**; prefer feeds exposing `podcast:transcript`.
+- Local script (successor to `download-rss-podcast.py`): fetch new episodes → publisher transcript if free, else Whisper → level-tag → sync to Supabase.
+- **Groq Whisper fallback in `processing.ts`** (whisper-large-v3-turbo, $0.04/hr): uploads work away from the Mac and for other users; more accurate than the local base model.
+- Optional one-time upgrade: re-transcribe the whole 740-episode library with Groq large-v3-turbo (~300 audio hours ≈ **$12**) for better transcript quality.
+
+### Phase 8 — Audiobooks ($0)
+- **LibriVox** (public domain — audio is legally re-hostable) Spanish catalog + matching Gutenberg text: run audio through the existing whisper pipeline for timestamped transcripts; drops straight into the podcast player (transcript, click-to-translate, lessons, vocab). Skews C1+/classics.
+- **Graded audiobooks — the interesting half:** LLM-generated/simplified stories at a chosen level + dialect (planned already; real graded readers aren't free) + TTS narration. Since we generate audio from text we own, sentence-level sync comes free — no transcription. Fills A1–B1 levels precisely.
+- TTS: Azure free tier (500k chars/mo ≈ one novel, es-CR/es-MX voices — same infra as Phase 4); if volume outgrows it, local **Kokoro** on the Mac ($0 at any volume, Spanish voices, fits ingestion-stays-local).
+- EPUB import (JSZip + epub.js) stays as a stretch item if text-only reading is ever wanted.
+
+_(Dialect packs are no longer a phase — the tutor side shipped in Phase 3; the TTS voice choice lands in Phase 4 and content filtering by dialect already exists in the library.)_
 
 ## Deferred add-ons
 
@@ -70,23 +85,26 @@ The core product. Cheap model (DeepSeek via OpenRouter) for volume work; better 
 
 ## Cost summary
 
+**Actuals so far (through 2026-08-28): ~$0.50 total spent** (classification $0.39, re-transcription lessons + testing the rest). Only paid service is OpenRouter; Supabase, Vercel, Archive.org, local whisper all $0.
+
 | Item | Cost |
 |---|---|
-| Supabase (personal free tier), Vercel hobby, Podcast Index, Gutenberg | $0 |
-| Local Whisper transcription | $0 |
+| Supabase (personal free tier), Vercel hobby, Podcast Index, LibriVox/Gutenberg, music embeds | $0 |
+| Local Whisper transcription / local Kokoro TTS | $0 |
 | Azure TTS + STT free tiers | $0 |
-| Level tagging (one-time) | ~$2 |
-| Text tutor + lessons (DeepSeek) | ~$1–3/mo |
-| Whisper API dictation (if not using free tiers) | ~$0–2/mo |
-| **Total recurring** | **~$2–5/mo** |
+| Text tutor + lessons + music sheets (DeepSeek), per active user | ~$1–3/mo |
+| Groq Whisper (dictation + pipeline fallback), likely inside free tier | ~$0–2/mo |
+| Optional one-time: re-transcribe library with Groq large-v3-turbo | ~$12 |
+| **Total recurring (solo)** | **~$1–3/mo** |
+| **Total recurring (4 family users)** | **~$4–10/mo** |
 
 Cost rules: voice only where it matters; push-to-talk not open mic (when realtime voice arrives); mini/cheap models for volume work; ride free tiers deliberately; keep ingestion local.
 
-## If it's ever marketed (known swap points)
+## Content legality (family now, marketed later)
 
-- Licensed or public-domain content only — no re-hosted podcast audio/transcripts (the 724 StoryLearning episodes on Archive.org are personal-use only).
-- Auth + per-user tables (schema in Phase 2 should keep `user_id` columns from day one to make this cheap).
-- Paid Supabase tier; voice minutes metered per user.
+- **Family stage (Phase 6):** invite-only, free, not publicly accessible — content shared within the group. The transcribed copyrighted shows (StoryLearning etc.) technically remain personal-use; a private 4-person family app is a deliberate, low-risk call by Thomas, not a marketable posture.
+- **Marketed stage — the flip is designed in:** `owner_id` on content tables from Phase 6 means copyrighted items go owner-only with a config change. The shared "legal shelf" is everything we can serve to strangers: public-domain audiobooks (LibriVox), our own LLM-generated graded stories + TTS audio, music via embeds, CC-licensed podcasts, and each user's own uploads (their transcriptions belong to their account).
+- Also at marketed stage: paid Supabase tier; voice minutes and LLM spend metered per user.
 
 ## Supabase MCP setup (done 2026-08-27)
 
