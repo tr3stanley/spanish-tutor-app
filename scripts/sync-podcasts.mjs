@@ -18,6 +18,7 @@ import { readFileSync } from 'fs';
 import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises';
 import { execFile } from 'child_process';
 import path from 'path';
+import { decodeEntities } from './lib/pipeline.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const env = readFileSync(path.join(ROOT, '.env.local'), 'utf8');
@@ -58,20 +59,6 @@ async function resolveFeed(search) {
 
 function asArray(x) {
   return Array.isArray(x) ? x : x == null ? [] : [x];
-}
-
-// Feeds often double-encode entities (&#8230;, &amp;#8217;) in titles.
-function decodeEntities(s) {
-  let out = String(s);
-  for (let i = 0; i < 2; i++) {
-    out = out
-      .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n)))
-      .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
-      .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
-  }
-  return out.trim();
 }
 
 async function fetchFeedItems(feedUrl) {
