@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import { callOpenRouterChat, ChatMessage } from '@/lib/ai';
-import { buildStudentContext, tutorSystemPrompt } from '@/lib/tutor';
+import { buildStudentContext, tutorSystemPrompt, normalizeCategory } from '@/lib/tutor';
 
 export async function GET() {
   try {
@@ -81,7 +81,7 @@ Their tutor replied (may contain corrections):
 
 List ONLY genuine Spanish grammar/vocabulary errors in the STUDENT'S message (max 3). Ignore missing accents/ñ/punctuation (typed input) and ignore their English. If no real errors, return {"errors": []}.
 
-Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correction": "<corrected version>", "note": "<3-6 word label, e.g. 'preterite of ir'>"}]}`,
+Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correction": "<corrected version>", "note": "<3-6 word label, e.g. 'preterite of ir'>", "category": "<one of: verb conjugation|gender/number agreement|ser vs estar|preterite vs imperfect|subjunctive|prepositions|word choice|word order|other>"}]}`,
         },
       ],
       { json: true, temperature: 0, maxTokens: 300 }
@@ -90,10 +90,11 @@ Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correctio
     const rows = (parsed.errors || [])
       .filter((e: { error?: string; correction?: string }) => e.error && e.correction)
       .slice(0, 3)
-      .map((e: { error: string; correction: string; note?: string }) => ({
+      .map((e: { error: string; correction: string; note?: string; category?: string }) => ({
         error: e.error,
         correction: e.correction,
         note: e.note || null,
+        category: normalizeCategory(e.category),
         source: 'chat',
       }));
     if (rows.length > 0) {

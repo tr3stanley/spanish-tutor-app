@@ -32,6 +32,24 @@ const DIALECT_PACKS: Record<string, string> = {
 - Prefer vocabulary understood across Latin America; note major regional differences when they matter.`,
 };
 
+// Fixed taxonomy so mistakes group into visible patterns.
+export const ERROR_CATEGORIES = [
+  'verb conjugation',
+  'gender/number agreement',
+  'ser vs estar',
+  'preterite vs imperfect',
+  'subjunctive',
+  'prepositions',
+  'word choice',
+  'word order',
+  'other',
+] as const;
+
+export function normalizeCategory(raw: string | null | undefined): string {
+  const c = (raw || '').toLowerCase().trim();
+  return (ERROR_CATEGORIES as readonly string[]).includes(c) ? c : 'other';
+}
+
 export function dialectInstructions(dialect: string | null): string {
   return DIALECT_PACKS[dialect || 'neutral_latam'] || DIALECT_PACKS.neutral_latam;
 }
@@ -142,14 +160,20 @@ HOW TO TEACH:
 - Reference episodes the student has listened to when relevant ("you heard this construction in...").
 - Keep replies focused and conversational — this is a chat, not an essay. Prefer under 250 words unless running a drill.
 - Always translate any Spanish you use at or above the student's level.
-- If a lesson's role-play is in progress (you'll see it in recent messages), STAY IN CHARACTER and keep the scene going in Spanish; step out only briefly for corrections, then back in.`;
+- If a lesson's role-play is in progress (you'll see it in recent messages), STAY IN CHARACTER and keep the scene going in Spanish; step out only briefly for corrections, then back in.
+- A course unit is only complete when the student can actually DO its milestone. When they handle the unit's role-play or drills confidently (few or no errors, no prompting needed), tell them plainly: "You've earned this one — hit Complete Unit." If they're not there yet, keep practicing; a unit can take several lessons.`;
 }
 
-// Generate the ordered course syllabus from the student's placement results.
-// Called after placement; replaces any existing syllabus.
-export async function generateSyllabus(): Promise<number> {
+// Generate one block of ~10 course units. Block 1 (after placement) replaces
+// everything; later blocks are appended, generated from the student's CURRENT
+// error log and completed units so each block targets live weaknesses.
+export async function generateSyllabus(block = 1): Promise<number> {
   const supabase = getSupabase();
   const context = await buildStudentContext();
+
+  const blockNote = block === 1
+    ? 'This is BLOCK 1, right after placement. Start just below their level to build confidence, end one notch above it.'
+    : `This is BLOCK ${block}. The student has completed the previous blocks (see the syllabus above — do NOT repeat those milestones). Design the next stage: weight it heavily toward their RECORDED ERRORS and push difficulty one step further toward spontaneous conversation.`;
 
   const raw = await callOpenRouterChat(
     [
@@ -157,7 +181,7 @@ export async function generateSyllabus(): Promise<number> {
         role: 'user',
         content: `${context}
 
-You are designing a Spanish course for this student. The single goal: get them COMFORTABLE IN REAL CONVERSATION as fast as possible. Design 10 ordered units, each one a concrete conversational milestone the student will be able to DO after the unit (e.g. "Order food and handle the waiter's follow-up questions", "Tell a story about your week in past tenses"). Start just below their level to build confidence, end one notch above it. Weight units toward their recorded gaps and goals. Grammar appears only in service of a milestone, never as a unit by itself.
+You are designing a Spanish course for this student. The single goal: get them COMFORTABLE IN REAL CONVERSATION as fast as possible. Design 10 ordered units, each one a concrete conversational milestone the student will be able to DO after the unit (e.g. "Order food and handle the waiter's follow-up questions", "Tell a story about your week in past tenses"). ${blockNote} Weight units toward their recorded gaps and goals. Grammar appears only in service of a milestone, never as a unit by itself.
 
 Return ONLY JSON: {"units": [{"title": "<milestone, imperative phrasing>", "description": "<1 sentence: what's covered>", "cefr_level": "<A1-C2>"}]}`,
       },
@@ -169,10 +193,23 @@ Return ONLY JSON: {"units": [{"title": "<milestone, imperative phrasing>", "desc
   const units = (parsed.units || []).filter((u: { title?: string }) => u.title);
   if (units.length === 0) throw new Error('Syllabus generation returned no units');
 
-  await supabase.from('course_units').delete().neq('id', 0);
+  let startPosition = 1;
+  if (block === 1) {
+    await supabase.from('course_units').delete().neq('id', 0);
+  } else {
+    const { data: last } = await supabase
+      .from('course_units')
+      .select('position')
+      .order('position', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    startPosition = (last?.position ?? 0) + 1;
+  }
+
   const { error } = await supabase.from('course_units').insert(
     units.map((u: { title: string; description?: string; cefr_level?: string }, i: number) => ({
-      position: i + 1,
+      position: startPosition + i,
+      block,
       title: u.title,
       description: u.description || null,
       cefr_level: u.cefr_level || null,
@@ -206,4 +243,4 @@ JUDGING:
 - A gap must be backed by evidence you can quote. If you cannot quote a real error, it is not a gap.
 
 WHEN DONE, output ONLY a JSON object, no other text:
-{"done": true, "cefr": "B1", "target_dialect": "costa_rican|mexican|castilian|rioplatense|neutral_latam", "goals": {"summary": "..."}, "strengths": {"strong": ["..."], "gaps": [{"issue": "...", "evidence": "exact quote from the student", "why": "what is wrong with it"}]}, "closing_message": "A warm 3-4 sentence summary for the student in English. Include: their level code WITH a plain-language explanation of what it means they can already do (e.g. 'B1 - Intermediate: you can already hold everyday conversations'), what they're solid on, and what you'll work on first."}`;
+{"done": true, "cefr": "B1", "target_dialect": "costa_rican|mexican|castilian|rioplatense|neutral_latam", "goals": {"summary": "..."}, "strengths": {"strong": ["..."], "gaps": [{"issue": "...", "evidence": "exact quote from the student", "why": "what is wrong with it", "category": "<one of: verb conjugation|gender/number agreement|ser vs estar|preterite vs imperfect|subjunctive|prepositions|word choice|word order|other>"}]}, "closing_message": "A warm 3-4 sentence summary for the student in English. Include: their level code WITH a plain-language explanation of what it means they can already do (e.g. 'B1 - Intermediate: you can already hold everyday conversations'), what they're solid on, and what you'll work on first."}`;

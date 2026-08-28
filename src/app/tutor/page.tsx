@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import Link from 'next/link';
 import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
@@ -12,6 +12,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   kind?: string;
+  at?: string;
 }
 
 interface Profile {
@@ -22,6 +23,7 @@ interface Profile {
 
 interface CourseUnit {
   position: number;
+  block: number;
   title: string;
   status: 'pending' | 'in_progress' | 'done';
 }
@@ -31,16 +33,87 @@ interface TodayInfo {
   syllabus: { total: number; done: number; current: CourseUnit | null; units: CourseUnit[] } | null;
 }
 
+interface LessonEntry {
+  id: number;
+  topic: string;
+  cefr_level: string | null;
+  content: string;
+  created_at: string;
+}
+
+interface MistakeGroup {
+  category: string;
+  count: number;
+  errors: { id: number; error: string; correction: string | null; note: string | null; created_at: string }[];
+  explainer: { explanation: string; created_at: string } | null;
+}
+
+const PLACEMENT_STORAGE_KEY = 'tutor-placement-progress';
+
+// Minimal rich text: **bold** plus preserved line breaks.
+function renderRich(text: string): ReactNode {
+  return text.split('\n').map((line, li) => {
+    const parts = line.split(/\*\*(.+?)\*\*/g);
+    return (
+      <span key={li}>
+        {li > 0 && <br />}
+        {parts.map((p, pi) => (pi % 2 === 1 ? <strong key={pi} className="font-semibold">{p}</strong> : p))}
+      </span>
+    );
+  });
+}
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function loadSavedPlacement(): Message[] | null {
+  try {
+    const raw = localStorage.getItem(PLACEMENT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePlacement(messages: Message[] | null) {
+  try {
+    if (messages) localStorage.setItem(PLACEMENT_STORAGE_KEY, JSON.stringify(messages));
+    else localStorage.removeItem(PLACEMENT_STORAGE_KEY);
+  } catch {
+    // storage unavailable — placement just won't survive reloads
+  }
+}
+
 export default function TutorPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [placementMode, setPlacementMode] = useState(false);
+  const [savedPlacement, setSavedPlacement] = useState<Message[] | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [today, setToday] = useState<TodayInfo | null>(null);
   const [showSyllabus, setShowSyllabus] = useState(false);
+  const [tab, setTab] = useState<'chat' | 'lessons' | 'mistakes'>('chat');
+  const [lessons, setLessons] = useState<LessonEntry[] | null>(null);
+  const [openLesson, setOpenLesson] = useState<number | null>(null);
+  const [mistakes, setMistakes] = useState<{ groups: MistakeGroup[]; total: number } | null>(null);
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const [explaining, setExplaining] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (tab === 'chat') messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, busy, tab]);
 
   const loadToday = useCallback(async () => {
     try {
@@ -51,19 +124,16 @@ export default function TutorPage() {
     }
   }, []);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, busy]);
-
   const loadChatHistory = useCallback(async () => {
     const res = await fetch('/api/tutor/chat');
     const data = await res.json();
     setMessages(
-      (data.messages || []).map((m: { id: number; role: string; content: string; kind: string }) => ({
+      (data.messages || []).map((m: { id: number; role: string; content: string; kind: string; created_at: string }) => ({
         id: String(m.id),
         role: m.role,
         content: m.content,
         kind: m.kind,
+        at: m.created_at,
       }))
     );
   }, []);
@@ -76,6 +146,8 @@ export default function TutorPage() {
         setProfile(data.profile);
         if (data.profile?.cefr_level) {
           await Promise.all([loadChatHistory(), loadToday()]);
+        } else {
+          setSavedPlacement(loadSavedPlacement());
         }
       } catch (e) {
         console.error('Failed to load profile:', e);
@@ -85,9 +157,38 @@ export default function TutorPage() {
     })();
   }, [loadChatHistory, loadToday]);
 
-  const startPlacement = async () => {
+  const loadLessons = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tutor/lessons');
+      setLessons((await res.json()).lessons || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const loadMistakes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tutor/mistakes');
+      const data = await res.json();
+      setMistakes({ groups: data.groups || [], total: data.total || 0 });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'lessons' && lessons === null) loadLessons();
+    if (tab === 'mistakes' && mistakes === null) loadMistakes();
+  }, [tab, lessons, mistakes, loadLessons, loadMistakes]);
+
+  const startPlacement = async (resume = false) => {
     setPlacementMode(true);
-    setMessages([]);
+    setTab('chat');
+    const resumed = resume ? (savedPlacement || []) : [];
+    setMessages(resumed);
+    if (!resume) savePlacement(null);
+    if (resumed.length > 0) return; // picks up where the saved interview left off
+
     setBusy(true);
     try {
       const res = await fetch('/api/tutor/placement', {
@@ -96,7 +197,9 @@ export default function TutorPage() {
         body: JSON.stringify({ history: [] }),
       });
       const data = await res.json();
-      setMessages([{ id: `a-${Date.now()}`, role: 'assistant', content: data.message }]);
+      const opening = [{ id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, at: new Date().toISOString() }];
+      setMessages(opening);
+      savePlacement(opening);
     } catch (e) {
       console.error(e);
     } finally {
@@ -108,7 +211,7 @@ export default function TutorPage() {
     const text = (textOverride ?? input).trim();
     if (!text || busy) return;
     setInput('');
-    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
+    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text, at: new Date().toISOString() };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setBusy(true);
@@ -122,12 +225,17 @@ export default function TutorPage() {
           body: JSON.stringify({ history }),
         });
         const data = await res.json();
-        setMessages(prev => [...prev, { id: `a-${Date.now()}`, role: 'assistant', content: data.message }]);
+        const withReply = [...nextMessages, { id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, at: new Date().toISOString() }];
+        setMessages(withReply);
         if (data.done) {
           setPlacementMode(false);
+          savePlacement(null);
+          setSavedPlacement(null);
           const profRes = await fetch('/api/tutor/profile');
           setProfile((await profRes.json()).profile);
           await loadToday();
+        } else {
+          savePlacement(withReply);
         }
       } else {
         const res = await fetch('/api/tutor/chat', {
@@ -140,11 +248,13 @@ export default function TutorPage() {
           id: `a-${Date.now()}`,
           role: 'assistant',
           content: data.response || data.error || 'Something went wrong.',
+          at: new Date().toISOString(),
         }]);
+        setMistakes(null); // may have new entries next time the tab opens
       }
     } catch (e) {
       console.error(e);
-      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'assistant', content: 'Sorry, that failed. Try again.' }]);
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'assistant', content: 'Sorry, that failed. Try again.', at: new Date().toISOString() }]);
     } finally {
       setBusy(false);
     }
@@ -152,6 +262,7 @@ export default function TutorPage() {
 
   const startLesson = async () => {
     if (busy) return;
+    setTab('chat');
     setBusy(true);
     try {
       const res = await fetch('/api/tutor/lesson', {
@@ -161,10 +272,33 @@ export default function TutorPage() {
       });
       const data = await res.json();
       if (data.lesson) {
-        setMessages(prev => [...prev, { id: `l-${Date.now()}`, role: 'assistant', content: data.lesson, kind: 'lesson' }]);
+        setMessages(prev => [...prev, { id: `l-${Date.now()}`, role: 'assistant', content: data.lesson, kind: 'lesson', at: new Date().toISOString() }]);
+        setLessons(null);
         await loadToday();
       } else if (data.error) {
-        setMessages(prev => [...prev, { id: `l-${Date.now()}`, role: 'assistant', content: data.error }]);
+        setMessages(prev => [...prev, { id: `l-${Date.now()}`, role: 'assistant', content: data.error, at: new Date().toISOString() }]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const completeUnit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/tutor/complete-unit', { method: 'POST' });
+      const data = await res.json();
+      if (data.completed) {
+        setMessages(prev => [...prev, {
+          id: `c-${Date.now()}`,
+          role: 'assistant',
+          content: `🎉 Unit ${data.completed.position} complete: ${data.completed.title}. On to the next one whenever you're ready!`,
+          at: new Date().toISOString(),
+        }]);
+        await loadToday();
       }
     } catch (e) {
       console.error(e);
@@ -174,10 +308,44 @@ export default function TutorPage() {
   };
 
   const startFreeChat = () => {
+    setTab('chat');
     send('Vamos a hacer 5 minutos de conversación libre, solo en español. Empieza tú con una pregunta sobre mi día o mis planes.');
   };
 
+  const explainCategory = async (category: string) => {
+    setExplaining(category);
+    try {
+      const res = await fetch('/api/tutor/mistakes/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category }),
+      });
+      const data = await res.json();
+      if (data.explainer) {
+        setMistakes(prev => prev ? {
+          ...prev,
+          groups: prev.groups.map(g => g.category === category ? { ...g, explainer: data.explainer } : g),
+        } : prev);
+        setOpenCategory(category);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExplaining(null);
+    }
+  };
+
   const hasProfile = !!profile?.cefr_level;
+  const currentUnit = today?.syllabus?.current || null;
+
+  const chips = [
+    { label: 'Explain that again', action: () => send('Can you explain that again more simply, with another example?') },
+    { label: 'Give me an example', action: () => send('Give me another example of that, with the English translation.') },
+    { label: 'Más despacio', action: () => send('Más despacio por favor — use simpler Spanish and shorter sentences.') },
+    { label: '¿Cómo se dice…?', action: () => { setInput('¿Cómo se dice "" en español?'); textareaRef.current?.focus(); } },
+  ];
+
+  let lastDay = '';
 
   return (
     <div className="min-h-screen cosmic-container">
@@ -202,7 +370,7 @@ export default function TutorPage() {
               )}
             </div>
             {hasProfile && !placementMode && (
-              <button onClick={startPlacement} disabled={busy}
+              <button onClick={() => startPlacement(false)} disabled={busy}
                 className="text-gray-400 hover:text-gray-200 text-sm">
                 Retake placement
               </button>
@@ -223,10 +391,17 @@ export default function TutorPage() {
               </Link>
               <button onClick={startLesson} disabled={busy}
                 className="cosmic-button px-3 py-1.5 rounded-lg disabled:opacity-50">
-                {today?.syllabus?.current
-                  ? `${today.syllabus.current.status === 'in_progress' ? 'Continue' : 'Start'} Unit ${today.syllabus.current.position}: ${today.syllabus.current.title.slice(0, 40)}${today.syllabus.current.title.length > 40 ? '…' : ''}`
+                {currentUnit
+                  ? `${currentUnit.status === 'in_progress' ? 'Practice' : 'Start'} Unit ${currentUnit.position}: ${currentUnit.title.slice(0, 40)}${currentUnit.title.length > 40 ? '…' : ''}`
                   : 'New Lesson'}
               </button>
+              {currentUnit?.status === 'in_progress' && (
+                <button onClick={completeUnit} disabled={busy}
+                  className="bg-green-400/20 text-green-200 border border-green-400/40 hover:bg-green-400/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  title="Your instructor will tell you when you've earned this">
+                  ✓ Complete Unit
+                </button>
+              )}
               <button onClick={startFreeChat} disabled={busy}
                 className="bg-white/10 text-gray-200 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
                 5-min chat en español
@@ -243,19 +418,39 @@ export default function TutorPage() {
           {/* Syllabus panel */}
           {hasProfile && !placementMode && showSyllabus && today?.syllabus && (
             <div className="glass-card rounded-lg p-4 mb-4">
-              <ol className="space-y-1.5 text-sm">
-                {today.syllabus.units.map(u => (
-                  <li key={u.position} className={`flex items-start space-x-2 ${
-                    u.status === 'done' ? 'text-gray-500 line-through' :
-                    u.status === 'in_progress' ? 'text-purple-300 font-medium' : 'text-gray-300'
+              {[...new Set(today.syllabus.units.map(u => u.block))].map(block => (
+                <div key={block} className="mb-3 last:mb-0">
+                  <div className="text-xs font-semibold text-gray-400 uppercase mb-1.5">Block {block}</div>
+                  <ol className="space-y-1.5 text-sm">
+                    {today.syllabus!.units.filter(u => u.block === block).map(u => (
+                      <li key={u.position} className={`flex items-start space-x-2 ${
+                        u.status === 'done' ? 'text-gray-500 line-through' :
+                        u.status === 'in_progress' ? 'text-purple-300 font-medium' : 'text-gray-300'
+                      }`}>
+                        <span className="flex-shrink-0">
+                          {u.status === 'done' ? '✓' : u.status === 'in_progress' ? '▶' : '○'}
+                        </span>
+                        <span>{u.position}. {u.title}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+              <p className="text-xs text-gray-500 mt-3">When a block is finished, the next one is generated from your current mistakes and progress.</p>
+            </div>
+          )}
+
+          {/* Tabs */}
+          {hasProfile && !placementMode && (
+            <div className="flex space-x-1 mb-4">
+              {([['chat', 'Chat'], ['lessons', 'Lessons'], ['mistakes', 'My Mistakes']] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setTab(key)}
+                  className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                    tab === key ? 'bg-white/15 text-white' : 'bg-white/5 text-gray-400 hover:text-gray-200'
                   }`}>
-                    <span className="flex-shrink-0">
-                      {u.status === 'done' ? '✓' : u.status === 'in_progress' ? '▶' : '○'}
-                    </span>
-                    <span>{u.position}. {u.title}</span>
-                  </li>
-                ))}
-              </ol>
+                  {label}
+                </button>
+              ))}
             </div>
           )}
 
@@ -267,38 +462,144 @@ export default function TutorPage() {
             <GlassCard className="p-8 text-center">
               <h2 className="text-xl font-semibold text-white mb-3">Welcome to your Spanish course</h2>
               <p className="text-gray-300 mb-6 max-w-lg mx-auto">
-                Start with a short placement interview (5 minutes, part English, part Spanish).
+                Start with a short placement interview (10 minutes, part English, part Spanish).
                 Your instructor will estimate your level, learn your goals and target dialect,
-                and build every lesson from there.
+                and build your course from there.
               </p>
-              <button onClick={startPlacement} className="cosmic-button px-6 py-3 rounded-lg font-medium">
-                Start Placement Interview
-              </button>
+              <div className="flex items-center justify-center space-x-3">
+                {savedPlacement && (
+                  <button onClick={() => startPlacement(true)} className="cosmic-button px-6 py-3 rounded-lg font-medium">
+                    Resume Placement Interview
+                  </button>
+                )}
+                <button onClick={() => startPlacement(false)}
+                  className={savedPlacement
+                    ? 'bg-white/10 text-gray-200 hover:bg-white/20 px-6 py-3 rounded-lg font-medium transition-colors'
+                    : 'cosmic-button px-6 py-3 rounded-lg font-medium'}>
+                  {savedPlacement ? 'Start Over' : 'Start Placement Interview'}
+                </button>
+              </div>
+            </GlassCard>
+          ) : tab === 'lessons' && !placementMode ? (
+            <GlassCard className="p-6">
+              <h2 className="text-lg font-semibold text-white mb-4">Your lessons</h2>
+              {lessons === null ? (
+                <p className="text-gray-400">Loading…</p>
+              ) : lessons.length === 0 ? (
+                <p className="text-gray-400">No lessons yet — hit the unit button above to start your first one.</p>
+              ) : (
+                <div className="space-y-2">
+                  {lessons.map(l => (
+                    <div key={l.id} className="border border-white/15 rounded-lg">
+                      <button onClick={() => setOpenLesson(openLesson === l.id ? null : l.id)}
+                        className="w-full text-left p-3 flex items-center justify-between hover:bg-white/5 transition-colors">
+                        <span className="text-white text-sm font-medium">{l.topic}</span>
+                        <span className="text-xs text-gray-400">
+                          {l.cefr_level && `${l.cefr_level} · `}{new Date(l.created_at).toLocaleDateString()} {openLesson === l.id ? '▾' : '▸'}
+                        </span>
+                      </button>
+                      {openLesson === l.id && (
+                        <div className="p-4 border-t border-white/10 text-sm text-gray-200 leading-relaxed">
+                          {renderRich(l.content)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+          ) : tab === 'mistakes' && !placementMode ? (
+            <GlassCard className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">My mistakes</h2>
+                {mistakes && <span className="text-sm text-gray-400">{mistakes.total} recorded</span>}
+              </div>
+              {mistakes === null ? (
+                <p className="text-gray-400">Loading…</p>
+              ) : mistakes.groups.length === 0 ? (
+                <p className="text-gray-400">Nothing recorded yet. Mistakes you make in chat and lessons are collected here automatically — with explanations of the patterns behind them.</p>
+              ) : (
+                <div className="space-y-3">
+                  {mistakes.groups.map(g => (
+                    <div key={g.category} className="border border-white/15 rounded-lg">
+                      <button onClick={() => setOpenCategory(openCategory === g.category ? null : g.category)}
+                        className="w-full text-left p-3 flex items-center justify-between hover:bg-white/5 transition-colors">
+                        <span className="text-white text-sm font-medium capitalize">{g.category}</span>
+                        <span className="text-xs text-gray-400">
+                          {g.count} mistake{g.count === 1 ? '' : 's'} {openCategory === g.category ? '▾' : '▸'}
+                        </span>
+                      </button>
+                      {openCategory === g.category && (
+                        <div className="p-4 border-t border-white/10 space-y-3">
+                          {g.errors.slice(0, 8).map(e => (
+                            <div key={e.id} className="text-sm">
+                              <span className="text-red-300 line-through">{e.error}</span>
+                              {e.correction && <span className="text-green-300"> → {e.correction}</span>}
+                              {e.note && <span className="text-gray-400 text-xs"> ({e.note})</span>}
+                            </div>
+                          ))}
+                          {g.explainer ? (
+                            <div className="mt-3 p-3 bg-purple-400/10 border-l-4 border-purple-400 rounded-md">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-semibold text-purple-300">THE PATTERN</span>
+                                <button onClick={() => explainCategory(g.category)} disabled={explaining === g.category}
+                                  className="text-xs text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                                  {explaining === g.category ? 'Updating…' : 'Refresh'}
+                                </button>
+                              </div>
+                              <div className="text-sm text-gray-200 leading-relaxed">{renderRich(g.explainer.explanation)}</div>
+                            </div>
+                          ) : (
+                            <button onClick={() => explainCategory(g.category)} disabled={explaining === g.category}
+                              className="cosmic-button px-3 py-1.5 rounded-lg text-xs disabled:opacity-50">
+                              {explaining === g.category ? 'Thinking…' : 'Explain this pattern'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </GlassCard>
           ) : (
-            <GlassCard className="flex flex-col" >
+            <GlassCard className="flex flex-col">
               <div className="p-4 space-y-4 overflow-y-auto" style={{ minHeight: '50vh', maxHeight: '65vh' }}>
                 {messages.length === 0 && !busy && (
                   <p className="text-gray-400 text-center py-8">
-                    Say hola, ask a question, or hit &quot;New Lesson&quot; to continue your course.
+                    Say hola, ask a question, or hit the unit button above to continue your course.
                   </p>
                 )}
-                {messages.map(m => (
-                  <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                      m.role === 'user'
-                        ? 'bg-gradient-to-r from-purple-500/40 to-blue-500/40 text-white'
-                        : m.kind === 'lesson'
-                          ? 'bg-emerald-400/10 border border-emerald-400/30 text-gray-100'
-                          : 'bg-white/10 text-gray-100'
-                    }`}>
-                      {m.kind === 'lesson' && (
-                        <div className="text-emerald-300 text-xs font-semibold mb-2">📚 LESSON</div>
+                {messages.map(m => {
+                  const day = m.at ? dayLabel(m.at) : '';
+                  const showDay = day && day !== lastDay;
+                  if (showDay) lastDay = day;
+                  return (
+                    <div key={m.id}>
+                      {showDay && (
+                        <div className="flex items-center my-4">
+                          <div className="flex-1 border-t border-white/10"></div>
+                          <span className="px-3 text-xs text-gray-500">{day}</span>
+                          <div className="flex-1 border-t border-white/10"></div>
+                        </div>
                       )}
-                      {m.content}
+                      <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                          m.role === 'user'
+                            ? 'bg-gradient-to-r from-purple-500/40 to-blue-500/40 text-white'
+                            : m.kind === 'lesson'
+                              ? 'bg-emerald-400/10 border border-emerald-400/30 text-gray-100'
+                              : 'bg-white/10 text-gray-100'
+                        }`}>
+                          {m.kind === 'lesson' && (
+                            <div className="text-emerald-300 text-xs font-semibold mb-2">📚 LESSON</div>
+                          )}
+                          {renderRich(m.content)}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {busy && (
                   <div className="flex justify-start">
                     <div className="bg-white/10 rounded-2xl px-4 py-3">
@@ -314,8 +615,19 @@ export default function TutorPage() {
               </div>
 
               <div className="p-4 border-t border-white/20">
+                {!placementMode && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {chips.map(c => (
+                      <button key={c.label} onClick={c.action} disabled={busy}
+                        className="px-3 py-1 text-xs rounded-full bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white transition-colors disabled:opacity-50">
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex space-x-3">
                   <textarea
+                    ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {

@@ -12,8 +12,9 @@ export async function POST(request: NextRequest) {
     const { topic } = await request.json().catch(() => ({ topic: undefined }));
     const supabase = getSupabase();
 
-    let unit: { id: number; position: number; title: string; description: string | null; cefr_level: string | null } | null = null;
+    let unit: { id: number; position: number; block: number; title: string; description: string | null; cefr_level: string | null; status: string } | null = null;
     let unitCount = 0;
+    let continuation = false;
 
     if (!topic?.trim()) {
       let { data: units } = await supabase.from('course_units').select('*').order('position');
@@ -24,28 +25,31 @@ export async function POST(request: NextRequest) {
         ({ data: units } = await supabase.from('course_units').select('*').order('position'));
       }
       units = units || [];
-      unitCount = units.length;
 
-      const inProgress = units.find(u => u.status === 'in_progress');
-      if (inProgress) {
-        await supabase
-          .from('course_units')
-          .update({ status: 'done', completed_at: new Date().toISOString() })
-          .eq('id', inProgress.id);
-      }
-      unit = units.find(u => u.status === 'pending' && u.id !== inProgress?.id) || null;
+      // A unit stays in_progress across lessons until the student completes it.
+      unit = units.find(u => u.status === 'in_progress') || units.find(u => u.status === 'pending') || null;
+
       if (!unit) {
-        return NextResponse.json({
-          error: 'Course complete! Retake placement to generate a new syllabus, or request a lesson on a specific topic.',
-        }, { status: 400 });
+        // Block finished — generate the next one from current errors and level
+        const lastBlock = Math.max(0, ...units.map(u => u.block ?? 1));
+        await generateSyllabus(lastBlock + 1);
+        ({ data: units } = await supabase.from('course_units').select('*').order('position'));
+        units = units || [];
+        unit = units.find(u => u.status === 'pending') || null;
+        if (!unit) throw new Error('Next block generated no units');
       }
-      await supabase.from('course_units').update({ status: 'in_progress' }).eq('id', unit.id);
+
+      continuation = unit.status === 'in_progress';
+      unitCount = units.length;
+      if (!continuation) {
+        await supabase.from('course_units').update({ status: 'in_progress' }).eq('id', unit.id);
+      }
     }
 
     const context = await buildStudentContext();
 
     const directive = unit
-      ? `Today's lesson is Unit ${unit.position} of your course syllabus: "${unit.title}"${unit.description ? ` (${unit.description})` : ''}.`
+      ? `Today's lesson is Unit ${unit.position} of your course syllabus: "${unit.title}"${unit.description ? ` (${unit.description})` : ''}.${continuation ? ' The student has already had at least one lesson on this unit but has not mastered it yet — this is a CONTINUATION: use fresh examples, fresh drills, and a different role-play scene for the same milestone. Do not repeat the previous lesson.' : ''}`
       : `Design today's lesson on this topic the student requested: "${topic.trim()}".`;
 
     const raw = await callOpenRouterChat(

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import { callOpenRouterChat, ChatMessage } from '@/lib/ai';
-import { PLACEMENT_SYSTEM, generateSyllabus } from '@/lib/tutor';
+import { PLACEMENT_SYSTEM, generateSyllabus, normalizeCategory } from '@/lib/tutor';
 
 // One placement interview turn. The client sends the whole interview so far;
 // placement is ephemeral — only the final assessment is persisted (to user_profile).
@@ -55,10 +55,11 @@ export async function POST(request: NextRequest) {
         const gaps = Array.isArray(assessment.strengths?.gaps) ? assessment.strengths.gaps : [];
         const errorRows = gaps
           .filter((g: { evidence?: string }) => g && typeof g === 'object' && g.evidence)
-          .map((g: { issue?: string; evidence: string; why?: string }) => ({
+          .map((g: { issue?: string; evidence: string; why?: string; category?: string }) => ({
             error: g.evidence,
             correction: null,
             note: [g.issue, g.why].filter(Boolean).join(': '),
+            category: normalizeCategory(g.category),
             source: 'placement',
           }));
         if (errorRows.length > 0) {

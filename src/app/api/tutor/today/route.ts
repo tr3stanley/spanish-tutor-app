@@ -13,7 +13,7 @@ export async function GET() {
         .select('lemma', { count: 'exact', head: true })
         .eq('status', 'learning')
         .lte('srs_due_at', now),
-      supabase.from('course_units').select('position, title, status').order('position'),
+      supabase.from('course_units').select('position, block, title, status').order('position'),
     ]);
 
     const units = unitsRes.data || [];
