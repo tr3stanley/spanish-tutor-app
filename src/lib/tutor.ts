@@ -206,4 +206,4 @@ JUDGING:
 - A gap must be backed by evidence you can quote. If you cannot quote a real error, it is not a gap.
 
 WHEN DONE, output ONLY a JSON object, no other text:
-{"done": true, "cefr": "B1", "target_dialect": "costa_rican|mexican|castilian|rioplatense|neutral_latam", "goals": {"summary": "..."}, "strengths": {"strong": ["..."], "gaps": [{"issue": "...", "evidence": "exact quote from the student", "why": "what is wrong with it"}]}, "closing_message": "A warm 2-3 sentence summary for the student in English: their level, what they're solid on, what you'll work on first."}`;
+{"done": true, "cefr": "B1", "target_dialect": "costa_rican|mexican|castilian|rioplatense|neutral_latam", "goals": {"summary": "..."}, "strengths": {"strong": ["..."], "gaps": [{"issue": "...", "evidence": "exact quote from the student", "why": "what is wrong with it"}]}, "closing_message": "A warm 3-4 sentence summary for the student in English. Include: their level code WITH a plain-language explanation of what it means they can already do (e.g. 'B1 - Intermediate: you can already hold everyday conversations'), what they're solid on, and what you'll work on first."}`;

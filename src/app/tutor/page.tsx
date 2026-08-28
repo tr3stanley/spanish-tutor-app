@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
 import CosmicBackground from '@/components/CosmicBackground';
+import { levelInfo } from '@/lib/levels';
 
 interface Message {
   id: string;
@@ -190,9 +191,13 @@ export default function TutorPage() {
                 Spanish Instructor
               </h1>
               {hasProfile && (
-                <p className="text-sm text-gray-300 mt-1">
+                <p
+                  className="text-sm text-gray-300 mt-1 cursor-help"
+                  title={levelInfo(profile.cefr_level)?.speaking || ''}
+                >
                   Level {profile.cefr_level}
-                  {profile.target_dialect && ` • ${profile.target_dialect.replace(/_/g, ' ')}`}
+                  {levelInfo(profile.cefr_level) && ` · ${levelInfo(profile.cefr_level)!.label}`}
+                  {profile.target_dialect && ` • ${profile.target_dialect.replace(/_/g, ' ')} Spanish`}
                 </p>
               )}
             </div>

@@ -8,6 +8,7 @@ import DownloadManager from '@/components/DownloadManager';
 import GlassCard from '@/components/GlassCard';
 import CosmicBackground from '@/components/CosmicBackground';
 import { offlineCleanup } from '@/lib/offline-cleanup';
+import { CEFR_LEVELS, levelInfo } from '@/lib/levels';
 
 interface Podcast {
   id: number;
@@ -35,6 +36,7 @@ export default function Home() {
   const [showDownloadManager, setShowDownloadManager] = useState(false);
   const [levelFilter, setLevelFilter] = useState('all');
   const [dialectFilter, setDialectFilter] = useState('all');
+  const [showLevelHelp, setShowLevelHelp] = useState(false);
 
   const fetchPodcasts = async () => {
     try {
@@ -58,7 +60,11 @@ export default function Home() {
     fetchPodcasts();
   };
 
-  const availableLevels = CEFR_ORDER.filter(l => podcasts.some(p => p.cefr_level === l));
+  const levelCounts = new Map<string, number>();
+  for (const p of podcasts) {
+    if (p.cefr_level) levelCounts.set(p.cefr_level, (levelCounts.get(p.cefr_level) || 0) + 1);
+  }
+  const availableLevels = CEFR_ORDER.filter(l => levelCounts.has(l));
   const availableDialects = [...new Set(podcasts.map(p => p.dialect).filter((d): d is string => !!d))].sort();
 
   const filteredPodcasts = podcasts.filter(p =>
@@ -153,9 +159,18 @@ export default function Home() {
                   >
                     <option value="all" className="bg-gray-900">All levels</option>
                     {availableLevels.map(l => (
-                      <option key={l} value={l} className="bg-gray-900">{l}</option>
+                      <option key={l} value={l} className="bg-gray-900">
+                        {l} · {levelInfo(l)?.label} ({levelCounts.get(l)})
+                      </option>
                     ))}
                   </select>
+                  <button
+                    onClick={() => setShowLevelHelp(s => !s)}
+                    className="w-8 h-8 rounded-full bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white text-sm font-semibold transition-colors"
+                    title="What do these levels mean?"
+                  >
+                    ?
+                  </button>
                   <select
                     value={dialectFilter}
                     onChange={(e) => setDialectFilter(e.target.value)}
@@ -172,6 +187,21 @@ export default function Home() {
             {(levelFilter !== 'all' || dialectFilter !== 'all') && (
               <div className="mt-2 text-sm text-gray-300">
                 Showing {filteredPodcasts.length} of {totalPodcasts} episodes
+              </div>
+            )}
+            {showLevelHelp && (
+              <div className="mt-4 bg-white/5 border border-white/10 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">What do these levels mean? Pick episodes where you follow the story but still meet new words.</h3>
+                <div className="space-y-2">
+                  {CEFR_LEVELS.map(l => (
+                    <div key={l.code} className="flex items-start space-x-3 text-sm">
+                      <span className={`flex-shrink-0 w-24 text-center px-1.5 py-0.5 rounded border text-xs font-semibold ${l.badgeClass}`}>
+                        {l.code} · {l.label}
+                      </span>
+                      <span className="text-gray-300">{l.listening}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

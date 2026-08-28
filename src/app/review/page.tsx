@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Navigation from '@/components/Navigation';
 import GlassCard from '@/components/GlassCard';
 import CosmicBackground from '@/components/CosmicBackground';
+import { levelInfo } from '@/lib/levels';
 
 interface Card {
   id: number;
@@ -111,7 +112,11 @@ export default function ReviewPage() {
               <div className="text-center">
                 <div className="flex justify-center items-center space-x-2 mb-6 text-xs text-gray-400">
                   {card.part_of_speech && <span className="bg-white/10 px-2 py-1 rounded">{card.part_of_speech}</span>}
-                  {card.cefr_level && <span className="bg-white/10 px-2 py-1 rounded">{card.cefr_level}</span>}
+                  {card.cefr_level && (
+                    <span className="bg-white/10 px-2 py-1 rounded cursor-help" title={levelInfo(card.cefr_level)?.speaking || ''}>
+                      {card.cefr_level}{levelInfo(card.cefr_level) ? ` · ${levelInfo(card.cefr_level)!.label}` : ''}
+                    </span>
+                  )}
                 </div>
                 <div className="text-4xl font-bold text-white mb-6">{card.word}</div>
 
