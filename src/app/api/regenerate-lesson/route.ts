@@ -37,15 +37,20 @@ export async function POST(request: NextRequest) {
     const fullTranscript = transcript.map(t => t.text).join(' ');
     const lesson = await generateLessonPlan(fullTranscript, podcast.language);
 
-    const { error } = await supabase
-      .from('lessons')
-      .update({
-        summary: lesson.summary,
-        grammar_rules: lesson.grammarRules,
-        vocabulary: lesson.vocabulary,
-      })
-      .eq('episode_id', podcastId);
+    // Replace any existing lesson (also covers episodes that never got one)
+    await supabase.from('lessons').delete().eq('episode_id', podcastId);
+    const { error } = await supabase.from('lessons').insert({
+      episode_id: podcastId,
+      summary: lesson.summary,
+      grammar_rules: lesson.grammarRules,
+      vocabulary: lesson.vocabulary,
+    });
     if (error) throw error;
+
+    await supabase
+      .from('episodes')
+      .update({ lesson_generated: true, processed_at: new Date().toISOString() })
+      .eq('id', podcastId);
 
     return NextResponse.json({
       success: true,
