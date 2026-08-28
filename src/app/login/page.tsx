@@ -5,9 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import GlassCard from '@/components/GlassCard';
 import CosmicBackground from '@/components/CosmicBackground';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
+import { REMEMBER_COOKIE, REMEMBER_MAX_AGE } from '@/lib/session';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
+  const [remember, setRemember] = useState(true);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +22,9 @@ function LoginForm() {
     setBusy(true);
     setError(null);
     try {
+      // Recorded now so /auth/confirm knows how long to keep the session when
+      // the emailed link comes back.
+      document.cookie = `${REMEMBER_COOKIE}=${remember ? '1' : '0'}; path=/; max-age=${REMEMBER_MAX_AGE}; samesite=lax`;
       const supabase = getBrowserSupabase();
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
@@ -69,10 +74,22 @@ function LoginForm() {
             className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-400 focus:outline-none"
           />
           {error && <p className="text-red-300 text-sm">{error}</p>}
+          <label className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={e => setRemember(e.target.checked)}
+              className="w-4 h-4 rounded border-white/30 bg-white/10 accent-purple-500"
+            />
+            <span>Keep me signed in on this device</span>
+          </label>
           <button type="submit" disabled={busy || !email.trim()}
             className="cosmic-button w-full py-3 rounded-lg font-medium disabled:opacity-50">
             {busy ? 'Sending…' : 'Email me a sign-in link'}
           </button>
+          <p className="text-xs text-gray-500 text-center">
+            Stay signed in for good — you&apos;ll only need another link if you sign out.
+          </p>
         </form>
       )}
     </GlassCard>

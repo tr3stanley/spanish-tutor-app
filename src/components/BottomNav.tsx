@@ -12,7 +12,7 @@ interface BottomNavProps {
 const TABS = [
   {
     href: '/',
-    label: 'Library',
+    label: 'Podcasts',
     icon: (
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -71,7 +71,7 @@ export default function BottomNav({ onUploadClick }: BottomNavProps) {
       {moreOpen && (
         <div className="md:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setMoreOpen(false)}>
           <div
-            className="absolute left-0 right-0 bottom-0 glass-card border-t border-white/20 rounded-t-2xl p-4 space-y-2"
+            className="absolute left-0 right-0 bottom-0 solid-nav rounded-t-2xl p-4 space-y-2"
             style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
             onClick={e => e.stopPropagation()}
           >
@@ -98,7 +98,7 @@ export default function BottomNav({ onUploadClick }: BottomNavProps) {
       )}
 
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-white/20"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 solid-nav"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="flex items-stretch">

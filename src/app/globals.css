@@ -265,3 +265,10 @@ body {
     padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
   }
 }
+
+/* Solid surface for the fixed mobile tab bar and its More sheet — a translucent
+   bar over scrolling content is hard to read. */
+.solid-nav {
+  background: #131a2e;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
