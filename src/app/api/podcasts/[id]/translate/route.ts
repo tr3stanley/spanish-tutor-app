@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat } from '@/lib/ai';
 
 export async function POST(
@@ -16,7 +16,9 @@ export async function POST(
     }
 
     // Get podcast info to determine source language
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: podcast } = await supabase
       .from('episodes')
       .select('language')

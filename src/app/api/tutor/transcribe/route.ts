@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { transcribeAudio } from '@/lib/whisper';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 const execAsync = promisify(exec);
 
@@ -14,6 +15,8 @@ export const maxDuration = 60;
 // (works on Vercel, $0.04/hr); local whisper-cli otherwise (dev machine only).
 export async function POST(request: NextRequest) {
   try {
+    if (!(await getAuth(request))) return unauthorized();
+
     const form = await request.formData();
     const file = form.get('audio');
     if (!(file instanceof File)) {

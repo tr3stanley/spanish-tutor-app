@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 // Student-confirmed unit completion (the tutor tells them when they've earned it).
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: unit } = await supabase
       .from('course_units')
       .select('id, position, title')

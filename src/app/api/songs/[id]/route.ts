@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
@@ -7,7 +7,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data, error } = await supabase
       .from('songs')
       .select('id, title, artist, media_url, lyrics, study_sheet, region, cefr_level, created_at')
@@ -35,7 +37,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     // song vocab rows cascade via the FK
     const { error } = await supabase.from('songs').delete().eq('id', id);
     if (error) throw error;

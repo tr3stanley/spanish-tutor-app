@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 interface ErrorRow {
   id: number;
@@ -12,9 +13,11 @@ interface ErrorRow {
 }
 
 // Mistakes grouped by category (most frequent first), with any cached explainer.
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const [errors, explainersRes] = await Promise.all([
       fetchAllRows<ErrorRow>((from, to) =>

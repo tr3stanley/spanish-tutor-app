@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { getBrowserSupabase } from '@/lib/supabase-browser';
 
 interface NavigationProps {
   onUploadClick?: () => void;
@@ -10,6 +12,18 @@ interface NavigationProps {
 export default function Navigation({ onUploadClick }: NavigationProps) {
   const pathname = usePathname();
   const isHomePage = pathname === '/';
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    getBrowserSupabase().auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user?.email ?? null);
+    });
+  }, []);
+
+  const signOut = async () => {
+    await getBrowserSupabase().auth.signOut();
+    window.location.href = '/login';
+  };
 
   return (
     <nav className="glass-card border-b border-white/20">
@@ -81,6 +95,19 @@ export default function Navigation({ onUploadClick }: NavigationProps) {
               </svg>
               <span className="font-medium">Upload Podcast</span>
             </button>
+
+            {userEmail && (
+              <button
+                onClick={signOut}
+                title={`Signed in as ${userEmail}`}
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span className="font-medium text-sm">Sign out</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

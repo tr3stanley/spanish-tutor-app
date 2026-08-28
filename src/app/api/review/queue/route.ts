@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 const QUEUE_SIZE = 20;
 
@@ -12,9 +13,11 @@ interface VocabRow {
 }
 
 // The review queue: cards due for review first, then new (never-reviewed) words.
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const [items, knownRows] = await Promise.all([
       fetchAllRows<VocabRow>((from, to) =>

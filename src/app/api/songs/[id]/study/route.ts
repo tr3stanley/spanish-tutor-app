@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat } from '@/lib/ai';
 import { getProfile, dialectInstructions } from '@/lib/tutor';
 
@@ -13,11 +13,13 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const [{ data: song }, profile] = await Promise.all([
       supabase.from('songs').select('id, title, artist, lyrics').eq('id', id).single(),
-      getProfile(),
+      getProfile(supabase),
     ]);
     if (!song) return NextResponse.json({ error: 'Song not found' }, { status: 404 });
     if (!song.lyrics) return NextResponse.json({ error: 'This song has no lyrics saved' }, { status: 400 });

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: profile } = await supabase.from('user_profile').select('*').maybeSingle();
     return NextResponse.json({ profile });
   } catch (error) {
@@ -21,10 +23,12 @@ export async function PUT(request: NextRequest) {
     if (target_dialect !== undefined) updates.target_dialect = target_dialect;
     if (goals !== undefined) updates.goals = goals;
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: profile, error } = await supabase
       .from('user_profile')
-      .upsert({ user_id: '00000000-0000-0000-0000-000000000000', ...updates })
+      .upsert({ user_id: auth.userId, ...updates })
       .select()
       .single();
     if (error) throw error;

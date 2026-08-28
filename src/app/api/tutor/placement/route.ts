@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat, ChatMessage } from '@/lib/ai';
 import { PLACEMENT_SYSTEM, generateSyllabus, normalizeCategory } from '@/lib/tutor';
 
@@ -26,9 +26,11 @@ export async function POST(request: NextRequest) {
     if (jsonMatch) {
       try {
         const assessment = JSON.parse(jsonMatch[0]);
-        const supabase = getSupabase();
+        const auth = await getAuth(request);
+        if (!auth) return unauthorized();
+        const { supabase } = auth;
         const { error } = await supabase.from('user_profile').upsert({
-          user_id: '00000000-0000-0000-0000-000000000000',
+          user_id: auth.userId,
           cefr_level: assessment.cefr,
           target_dialect: assessment.target_dialect,
           goals: assessment.goals || {},
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
         // Build the course syllabus from the fresh profile
         let unitCount = 0;
         try {
-          unitCount = await generateSyllabus();
+          unitCount = await generateSyllabus(supabase);
         } catch (syllabusError) {
           console.error('Syllabus generation failed (can retry from lesson flow):', syllabusError);
         }

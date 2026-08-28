@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { processEpisode } from '@/lib/processing';
 
 interface CollectionFile {
@@ -27,7 +28,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const rows = (files as CollectionFile[]).map(file => {
       const title = file.title || file.name.replace(/\.[^/.]+$/, '');
@@ -48,7 +51,7 @@ export async function POST(request: NextRequest) {
     const podcastIds = (inserted || []).map(e => e.id);
 
     // Start background processing in batches
-    processBatchInBackground(files, podcastIds, language);
+    processBatchInBackground(supabase, files, podcastIds, language);
 
     return NextResponse.json({
       success: true,
@@ -67,6 +70,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function processBatchInBackground(
+  supabase: SupabaseClient,
   files: CollectionFile[],
   podcastIds: number[],
   language: 'spanish' | 'russian'
@@ -82,7 +86,7 @@ async function processBatchInBackground(
     const promises = batch.map((file, index) => {
       const podcastId = batchIds[index];
       if (podcastId) {
-        return processEpisode(podcastId, file.url, language).catch(() => {});
+        return processEpisode(supabase, podcastId, file.url, language).catch(() => {});
       }
       return Promise.resolve();
     });

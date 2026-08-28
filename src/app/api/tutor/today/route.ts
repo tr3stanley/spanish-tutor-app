@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 // Everything the "Today" strip needs in one call.
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const now = new Date().toISOString();
 
     const [dueRes, unitsRes] = await Promise.all([

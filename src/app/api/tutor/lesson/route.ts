@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat } from '@/lib/ai';
 import { buildStudentContext, tutorSystemPrompt, generateSyllabus } from '@/lib/tutor';
 
@@ -10,7 +10,9 @@ import { buildStudentContext, tutorSystemPrompt, generateSyllabus } from '@/lib/
 export async function POST(request: NextRequest) {
   try {
     const { topic } = await request.json().catch(() => ({ topic: undefined }));
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     let unit: { id: number; position: number; block: number; title: string; description: string | null; cefr_level: string | null; status: string } | null = null;
     let unitCount = 0;
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
 
       if (!units || units.length === 0) {
         // Profile predates the syllabus feature (or generation failed after placement)
-        await generateSyllabus();
+        await generateSyllabus(supabase);
         ({ data: units } = await supabase.from('course_units').select('*').order('position'));
       }
       units = units || [];
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
       if (!unit) {
         // Block finished — generate the next one from current errors and level
         const lastBlock = Math.max(0, ...units.map(u => u.block ?? 1));
-        await generateSyllabus(lastBlock + 1);
+        await generateSyllabus(supabase, lastBlock + 1);
         ({ data: units } = await supabase.from('course_units').select('*').order('position'));
         units = units || [];
         unit = units.find(u => u.status === 'pending') || null;
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const context = await buildStudentContext();
+    const context = await buildStudentContext(supabase);
 
     const directive = unit
       ? `Today's lesson is Unit ${unit.position} of your course syllabus: "${unit.title}"${unit.description ? ` (${unit.description})` : ''}.${continuation ? ' The student has already had at least one lesson on this unit but has not mastered it yet — this is a CONTINUATION: use fresh examples, fresh drills, and a different role-play scene for the same milestone. Do not repeat the previous lesson.' : ''}`

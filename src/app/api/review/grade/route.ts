@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 // Simple SM-2-style scheduling. grade: 'again' | 'hard' | 'good' | 'easy'
 export async function POST(request: NextRequest) {
@@ -9,7 +9,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'lemma and grade (again|hard|good|easy) required' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: existing } = await supabase
       .from('known_words')
       .select('*')
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       .from('known_words')
       .upsert(
         {
-          user_id: '00000000-0000-0000-0000-000000000000',
+          user_id: auth.userId,
           lemma,
           status,
           srs_ease: ease,

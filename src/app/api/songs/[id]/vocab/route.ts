@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat } from '@/lib/ai';
 import frequencyRanks from '@/data/es-frequency.json';
 
@@ -14,7 +14,9 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const { data: song } = await supabase
       .from('songs')

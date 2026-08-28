@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { processEpisode } from '@/lib/processing';
 
 export async function POST(request: NextRequest) {
@@ -59,7 +59,9 @@ export async function POST(request: NextRequest) {
       filepath = audioUrl;
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: episode, error } = await supabase
       .from('episodes')
       .insert({ title, filename, file_path: filepath, language })
@@ -70,7 +72,7 @@ export async function POST(request: NextRequest) {
     const podcastId = episode.id;
 
     // Start background processing with Whisper
-    processEpisode(podcastId, filepath, language).catch(() => {});
+    processEpisode(supabase, podcastId, filepath, language).catch(() => {});
 
     return NextResponse.json({
       success: true,

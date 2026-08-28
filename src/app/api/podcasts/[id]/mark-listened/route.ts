@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
@@ -7,20 +7,26 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
-    const { data: podcast, error } = await supabase
+    const { data: podcast } = await supabase
       .from('episodes')
-      .update({ listened: true })
+      .select('id, title')
       .eq('id', parseInt(id))
-      .select()
       .maybeSingle();
-
-    if (error) throw error;
-
     if (!podcast) {
       return NextResponse.json({ error: 'Podcast not found' }, { status: 404 });
     }
+
+    const { error } = await supabase
+      .from('user_episodes')
+      .upsert(
+        { user_id: auth.userId, episode_id: parseInt(id), listened: true, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,episode_id' }
+      );
+    if (error) throw error;
 
     return NextResponse.json({
       success: true,

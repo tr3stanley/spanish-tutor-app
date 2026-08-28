@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat } from '@/lib/ai';
 import { normalizeCategory, getProfile, dialectInstructions } from '@/lib/tutor';
 
@@ -10,7 +10,9 @@ export async function POST(request: NextRequest) {
     const { category: rawCategory } = await request.json();
     const category = normalizeCategory(rawCategory);
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const [{ data: errors }, profile] = await Promise.all([
       supabase
         .from('error_log')
@@ -18,7 +20,7 @@ export async function POST(request: NextRequest) {
         .eq('category', category)
         .order('created_at', { ascending: false })
         .limit(15),
-      getProfile(),
+      getProfile(supabase),
     ]);
 
     if (!errors || errors.length === 0) {
@@ -51,7 +53,7 @@ Keep it under 350 words and encouraging.`,
       .from('error_explainers')
       .upsert(
         {
-          user_id: '00000000-0000-0000-0000-000000000000',
+          user_id: auth.userId,
           category,
           explanation,
           created_at: new Date().toISOString(),

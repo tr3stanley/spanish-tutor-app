@@ -1,4 +1,4 @@
-import { getSupabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { callOpenRouterChat } from '@/lib/ai';
 
 export interface UserProfile {
@@ -54,23 +54,20 @@ export function dialectInstructions(dialect: string | null): string {
   return DIALECT_PACKS[dialect || 'neutral_latam'] || DIALECT_PACKS.neutral_latam;
 }
 
-export async function getProfile(): Promise<UserProfile | null> {
-  const supabase = getSupabase();
+export async function getProfile(supabase: SupabaseClient): Promise<UserProfile | null> {
   const { data } = await supabase.from('user_profile').select('*').maybeSingle();
   return data;
 }
 
 // Everything the tutor should know about the student, assembled from Supabase.
-export async function buildStudentContext(): Promise<string> {
-  const supabase = getSupabase();
-
+export async function buildStudentContext(supabase: SupabaseClient): Promise<string> {
   const [profileRes, listenedRes, lessonsRes, dueRes, errorsRes, unitsRes] = await Promise.all([
     supabase.from('user_profile').select('*').maybeSingle(),
     supabase
-      .from('episodes')
-      .select('title, cefr_level, topic, dialect')
+      .from('user_episodes')
+      .select('episodes(title, cefr_level, topic, dialect)')
       .eq('listened', true)
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(20),
     supabase
       .from('tutor_lessons')
@@ -94,7 +91,9 @@ export async function buildStudentContext(): Promise<string> {
   ]);
 
   const profile = profileRes.data;
-  const listened = listenedRes.data || [];
+  const listened = (listenedRes.data || [])
+    .map(r => (Array.isArray(r.episodes) ? r.episodes[0] : r.episodes))
+    .filter((e): e is { title: string; cefr_level: string | null; topic: string | null; dialect: string | null } => !!e);
   const lessons = lessonsRes.data || [];
   const dueCount = dueRes.count ?? 0;
   const errors = errorsRes.data || [];
@@ -167,9 +166,8 @@ HOW TO TEACH:
 // Generate one block of ~10 course units. Block 1 (after placement) replaces
 // everything; later blocks are appended, generated from the student's CURRENT
 // error log and completed units so each block targets live weaknesses.
-export async function generateSyllabus(block = 1): Promise<number> {
-  const supabase = getSupabase();
-  const context = await buildStudentContext();
+export async function generateSyllabus(supabase: SupabaseClient, block = 1): Promise<number> {
+  const context = await buildStudentContext(supabase);
 
   const blockNote = block === 1
     ? 'This is BLOCK 1, right after placement. Start just below their level to build confidence, end one notch above it.'

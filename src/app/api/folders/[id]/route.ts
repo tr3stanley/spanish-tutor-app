@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
@@ -13,7 +13,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data: folder, error } = await supabase
       .from('folders')
       .update({ name: name.trim() })
@@ -48,7 +50,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const { count } = await supabase
       .from('episodes')

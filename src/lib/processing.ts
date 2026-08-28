@@ -1,16 +1,15 @@
-import { getSupabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { processAudioWithWhisper } from '@/lib/whisper';
 import { generateLessonPlan } from '@/lib/ai';
 
 // Transcribe an episode with local Whisper, save segments + lesson, mark processed.
 // Runs only where whisper-cpp exists (local Mac), not on Vercel.
 export async function processEpisode(
+  supabase: SupabaseClient,
   episodeId: number,
   filepath: string,
   language: 'spanish' | 'russian'
 ): Promise<void> {
-  const supabase = getSupabase();
-
   try {
     console.log(`Processing episode ${episodeId} with Whisper...`);
 

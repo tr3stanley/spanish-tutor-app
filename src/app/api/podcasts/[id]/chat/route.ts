@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouter } from '@/lib/ai';
 
 interface ConversationMessage {
@@ -23,7 +24,9 @@ export async function POST(
       );
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const { data: podcast } = await supabase
       .from('episodes')

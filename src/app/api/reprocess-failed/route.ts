@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { processEpisode } from '@/lib/processing';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     // Episodes with no transcript segments = failed processing
     const { data: failedPodcasts, error } = await supabase.rpc('episodes_missing_transcripts');
@@ -26,7 +29,7 @@ export async function POST() {
       });
     }
 
-    reprocessBatchInBackground(failedPodcasts);
+    reprocessBatchInBackground(supabase, failedPodcasts);
 
     return NextResponse.json({
       success: true,
@@ -50,7 +53,7 @@ interface FailedEpisode {
   language: 'spanish' | 'russian';
 }
 
-async function reprocessBatchInBackground(podcasts: FailedEpisode[]) {
+async function reprocessBatchInBackground(supabase: SupabaseClient, podcasts: FailedEpisode[]) {
   const BATCH_SIZE = 2; // Process 2 files at a time for better success rate
 
   for (let i = 0; i < podcasts.length; i += BATCH_SIZE) {
@@ -59,7 +62,7 @@ async function reprocessBatchInBackground(podcasts: FailedEpisode[]) {
     console.log(`Reprocessing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(podcasts.length / BATCH_SIZE)}`);
 
     await Promise.allSettled(
-      batch.map(p => processEpisode(p.id, p.file_path, p.language).catch(() => {}))
+      batch.map(p => processEpisode(supabase, p.id, p.file_path, p.language).catch(() => {}))
     );
 
     if (i + BATCH_SIZE < podcasts.length) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat } from '@/lib/ai';
 import frequencyRanks from '@/data/es-frequency.json';
 
@@ -9,19 +10,24 @@ const RANKS: Record<string, number> = frequencyRanks;
 
 // Build the review queue source: extract vocabulary from listened episodes
 // that don't have vocabulary_items yet.
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
-    const [listened, extracted] = await Promise.all([
-      fetchAllRows<{ id: number; title: string; cefr_level: string | null }>((from, to) =>
-        supabase.from('episodes').select('id, title, cefr_level').eq('listened', true).order('id').range(from, to)
+    const [listenedRows, extracted] = await Promise.all([
+      fetchAllRows<{ episode_id: number; episodes: { id: number; title: string; cefr_level: string | null } | { id: number; title: string; cefr_level: string | null }[] | null }>((from, to) =>
+        supabase.from('user_episodes').select('episode_id, episodes(id, title, cefr_level)').eq('listened', true).order('episode_id').range(from, to)
       ),
       fetchAllRows<{ episode_id: number }>((from, to) =>
         supabase.from('vocabulary_items').select('episode_id').order('id').range(from, to)
       ),
     ]);
 
+    const listened = listenedRows
+      .map(r => (Array.isArray(r.episodes) ? r.episodes[0] : r.episodes))
+      .filter((e): e is { id: number; title: string; cefr_level: string | null } => !!e);
     const extractedIds = new Set(extracted.map(v => v.episode_id));
     const pending = listened.filter(e => !extractedIds.has(e.id));
 

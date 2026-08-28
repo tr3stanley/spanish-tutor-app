@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { callOpenRouterChat, ChatMessage } from '@/lib/ai';
 import { buildStudentContext, tutorSystemPrompt, normalizeCategory } from '@/lib/tutor';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data } = await supabase
       .from('tutor_messages')
       .select('id, role, content, kind, created_at')
@@ -26,10 +29,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const [context, historyRes] = await Promise.all([
-      buildStudentContext(),
+      buildStudentContext(supabase),
       supabase
         .from('tutor_messages')
         .select('role, content')
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
     ]);
     if (error) console.error('Failed to save tutor messages:', error.message);
 
-    await recordErrors(message.trim(), reply);
+    await recordErrors(supabase, message.trim(), reply);
 
     return NextResponse.json({ response: reply });
   } catch (error) {
@@ -61,7 +66,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Log corrections so future lessons and drills recycle the student's real mistakes.
-async function recordErrors(studentMessage: string, tutorReply: string) {
+async function recordErrors(supabase: SupabaseClient, studentMessage: string, tutorReply: string) {
   try {
     // Cheap heuristic gate: only run the extraction call when the student
     // actually wrote some Spanish-looking content.
@@ -98,7 +103,6 @@ Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correctio
         source: 'chat',
       }));
     if (rows.length > 0) {
-      const supabase = getSupabase();
       await supabase.from('error_log').insert(rows);
     }
   } catch (e) {

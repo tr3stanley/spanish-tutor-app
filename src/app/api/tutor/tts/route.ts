@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProfile } from '@/lib/tutor';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 export const maxDuration = 60;
 
@@ -20,6 +21,9 @@ function escapeXml(s: string): string {
 // set; otherwise tells the client to use the browser's built-in speech synthesis.
 export async function POST(request: NextRequest) {
   try {
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+
     const { text } = await request.json();
     if (!text?.trim()) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
@@ -31,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const region = process.env.AZURE_SPEECH_REGION || 'eastus';
-    const profile = await getProfile();
+    const profile = await getProfile(auth.supabase);
     const voice = VOICE_BY_DIALECT[profile?.target_dialect || ''] || 'es-US-PalomaNeural';
 
     const clean = text

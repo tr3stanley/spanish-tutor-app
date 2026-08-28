@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
@@ -9,29 +9,49 @@ export async function PUT(
     const { id } = await params;
     const { folder_id, listened } = await request.json();
 
-    const updates: { folder_id?: number | null; listened?: boolean } = {};
-    if (folder_id !== undefined) updates.folder_id = folder_id;
-    if (listened !== undefined) updates.listened = !!listened;
-
-    if (Object.keys(updates).length === 0) {
+    if (folder_id === undefined && listened === undefined) {
       return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
-    const { data: podcast, error } = await supabase
-      .from('episodes')
-      .update(updates)
-      .eq('id', parseInt(id))
-      .select()
-      .maybeSingle();
-
-    if (error) throw error;
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
+    let podcast;
+    if (folder_id !== undefined) {
+      const { data, error } = await supabase
+        .from('episodes')
+        .update({ folder_id })
+        .eq('id', parseInt(id))
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      podcast = data;
+    } else {
+      const { data, error } = await supabase
+        .from('episodes')
+        .select()
+        .eq('id', parseInt(id))
+        .maybeSingle();
+      if (error) throw error;
+      podcast = data;
+    }
 
     if (!podcast) {
       return NextResponse.json({ error: 'Podcast not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ podcast });
+    // listened is per-user now
+    if (listened !== undefined) {
+      const { error } = await supabase
+        .from('user_episodes')
+        .upsert(
+          { user_id: auth.userId, episode_id: parseInt(id), listened: !!listened, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,episode_id' }
+        );
+      if (error) throw error;
+    }
+
+    return NextResponse.json({ podcast: { ...podcast, listened: listened !== undefined ? !!listened : undefined } });
   } catch (error) {
     console.error('Error updating podcast:', error);
     return NextResponse.json(

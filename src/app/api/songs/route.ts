@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data, error } = await supabase
       .from('songs')
       .select('id, title, artist, media_url, region, cefr_level, study_sheet, created_at')
@@ -37,7 +39,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Paste the song lyrics (needed for the study sheet)' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const { data, error } = await supabase
       .from('songs')
       .insert({

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 
 interface EpisodeRow {
   [key: string]: unknown;
@@ -7,19 +8,29 @@ interface EpisodeRow {
   lessons: { id: number }[] | null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = getSupabase();
-    const data = await fetchAllRows<EpisodeRow>((from, to) =>
-      supabase
-        .from('episodes')
-        .select('*, folders(name), lessons(id)')
-        .order('created_at', { ascending: false })
-        .range(from, to)
-    );
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
+    const [data, listenedRes] = await Promise.all([
+      fetchAllRows<EpisodeRow>((from, to) =>
+        supabase
+          .from('episodes')
+          .select('*, folders(name), lessons(id)')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      ),
+      // per-user listened flags (RLS scopes to the signed-in user)
+      fetchAllRows<{ episode_id: number }>((from, to) =>
+        supabase.from('user_episodes').select('episode_id').eq('listened', true).order('episode_id').range(from, to)
+      ),
+    ]);
 
+    const listenedIds = new Set(listenedRes.map(r => r.episode_id));
     const podcasts = data.map(({ folders, lessons, ...episode }) => ({
       ...episode,
+      listened: listenedIds.has(episode.id as number),
       folder_name: folders?.name ?? null,
       has_lesson: (lessons?.length ?? 0) > 0 ? 1 : 0,
     }));

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import { generateLessonPlan } from '@/lib/ai';
 
 export async function POST(request: NextRequest) {
@@ -10,7 +11,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Podcast ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
 
     const transcript = await fetchAllRows<{ text: string }>((from, to) =>
       supabase

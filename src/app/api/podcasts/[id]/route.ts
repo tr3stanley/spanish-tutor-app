@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase, fetchAllRows, TranscriptSegment } from '@/lib/supabase';
+import { fetchAllRows, TranscriptSegment } from '@/lib/supabase';
+import { getAuth, unauthorized } from '@/lib/auth';
 import fs from 'fs/promises';
 
 export async function GET(
@@ -8,7 +9,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const podcastId = parseInt(id);
 
     const { data: podcast } = await supabase
@@ -70,7 +73,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = getSupabase();
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
     const podcastId = parseInt(id);
 
     const { data: podcast } = await supabase
