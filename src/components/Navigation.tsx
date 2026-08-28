@@ -32,6 +32,24 @@ export default function Navigation({ onUploadClick }: NavigationProps) {
 
           {/* Navigation Items */}
           <div className="flex items-center space-x-4">
+            <Link
+              href="/tutor"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                pathname === '/tutor' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <span>🎓</span>
+              <span className="font-medium">Instructor</span>
+            </Link>
+            <Link
+              href="/review"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                pathname === '/review' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <span>🃏</span>
+              <span className="font-medium">Review</span>
+            </Link>
             {!isHomePage && (
               <Link
                 href="/"

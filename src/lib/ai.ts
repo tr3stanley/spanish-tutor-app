@@ -6,6 +6,45 @@ interface OpenRouterResponse {
   }>;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export async function callOpenRouterChat(
+  messages: ChatMessage[],
+  options: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+    json?: boolean;
+  } = {}
+): Promise<string> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'Spanish Tutor'
+    },
+    body: JSON.stringify({
+      model: options.model || 'deepseek/deepseek-chat',
+      messages,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2000,
+      ...(options.json ? { response_format: { type: 'json_object' } } : {})
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API error: ${response.statusText}`);
+  }
+
+  const data: OpenRouterResponse = await response.json();
+  return data.choices[0]?.message?.content || '';
+}
+
 export async function callOpenRouter(
   prompt: string,
   model: string = 'deepseek/deepseek-chat'
