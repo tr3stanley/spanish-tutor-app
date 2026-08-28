@@ -51,9 +51,56 @@ export async function POST(request: NextRequest) {
     ]);
     if (error) console.error('Failed to save tutor messages:', error.message);
 
+    await recordErrors(message.trim(), reply);
+
     return NextResponse.json({ response: reply });
   } catch (error) {
     console.error('Tutor chat error:', error);
     return NextResponse.json({ error: 'Failed to process message' }, { status: 500 });
+  }
+}
+
+// Log corrections so future lessons and drills recycle the student's real mistakes.
+async function recordErrors(studentMessage: string, tutorReply: string) {
+  try {
+    // Cheap heuristic gate: only run the extraction call when the student
+    // actually wrote some Spanish-looking content.
+    if (!/[áéíóúñ¿¡]|\b(el|la|los|que|es|un|una|yo|tu|de|en|mi|me|no|si|hola|gracias|pero|porque)\b/i.test(studentMessage)) {
+      return;
+    }
+
+    const raw = await callOpenRouterChat(
+      [
+        {
+          role: 'user',
+          content: `A Spanish student wrote this message:
+"${studentMessage}"
+
+Their tutor replied (may contain corrections):
+"${tutorReply.slice(0, 1500)}"
+
+List ONLY genuine Spanish grammar/vocabulary errors in the STUDENT'S message (max 3). Ignore missing accents/ñ/punctuation (typed input) and ignore their English. If no real errors, return {"errors": []}.
+
+Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correction": "<corrected version>", "note": "<3-6 word label, e.g. 'preterite of ir'>"}]}`,
+        },
+      ],
+      { json: true, temperature: 0, maxTokens: 300 }
+    );
+    const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
+    const rows = (parsed.errors || [])
+      .filter((e: { error?: string; correction?: string }) => e.error && e.correction)
+      .slice(0, 3)
+      .map((e: { error: string; correction: string; note?: string }) => ({
+        error: e.error,
+        correction: e.correction,
+        note: e.note || null,
+        source: 'chat',
+      }));
+    if (rows.length > 0) {
+      const supabase = getSupabase();
+      await supabase.from('error_log').insert(rows);
+    }
+  } catch (e) {
+    console.error('Error extraction failed (non-fatal):', e);
   }
 }

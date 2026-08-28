@@ -166,6 +166,11 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
     return acc;
   }, {} as Record<string | number, Podcast[]>);
 
+  // Episode order within a folder (numeric-aware so S6E2 sorts before S6E10)
+  for (const group of Object.values(groupedPodcasts)) {
+    group.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true }));
+  }
+
   const unfiledPodcasts = groupedPodcasts['unfiled'] || [];
 
   if (loading) {

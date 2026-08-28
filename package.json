@@ -10,16 +10,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
-    "@types/multer": "^2.0.0",
-    "googleapis": "^160.0.0",
-    "multer": "^2.0.2",
     "next": "15.5.12",
-    "node-id3": "^0.2.9",
-    "openai": "^5.22.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "wavesurfer.js": "^7.10.1",
-    "ytdl-core": "^4.11.5"
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -32,11 +25,5 @@
     "eslint-config-next": "15.5.12",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "pnpm": {
-    "approvedBuilds": [
-      "better-sqlite3",
-      "sqlite3"
-    ]
   }
 }

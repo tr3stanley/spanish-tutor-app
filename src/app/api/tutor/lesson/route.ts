@@ -1,20 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import { callOpenRouterChat } from '@/lib/ai';
-import { buildStudentContext, tutorSystemPrompt } from '@/lib/tutor';
+import { buildStudentContext, tutorSystemPrompt, generateSyllabus } from '@/lib/tutor';
 
-// Generate the next lesson. It is logged to tutor_lessons (so future lessons
-// build on it) and appended to the chat thread, where the student works
-// through the exercises with the tutor.
+// Generate the next lesson. Without a requested topic it walks the course
+// syllabus: the current in_progress unit is marked done and the next pending
+// unit becomes the lesson. Lessons follow a fixed conversational shape:
+// error review -> concept -> drills -> role-play.
 export async function POST(request: NextRequest) {
   try {
     const { topic } = await request.json().catch(() => ({ topic: undefined }));
+    const supabase = getSupabase();
+
+    let unit: { id: number; position: number; title: string; description: string | null; cefr_level: string | null } | null = null;
+    let unitCount = 0;
+
+    if (!topic?.trim()) {
+      let { data: units } = await supabase.from('course_units').select('*').order('position');
+
+      if (!units || units.length === 0) {
+        // Profile predates the syllabus feature (or generation failed after placement)
+        await generateSyllabus();
+        ({ data: units } = await supabase.from('course_units').select('*').order('position'));
+      }
+      units = units || [];
+      unitCount = units.length;
+
+      const inProgress = units.find(u => u.status === 'in_progress');
+      if (inProgress) {
+        await supabase
+          .from('course_units')
+          .update({ status: 'done', completed_at: new Date().toISOString() })
+          .eq('id', inProgress.id);
+      }
+      unit = units.find(u => u.status === 'pending' && u.id !== inProgress?.id) || null;
+      if (!unit) {
+        return NextResponse.json({
+          error: 'Course complete! Retake placement to generate a new syllabus, or request a lesson on a specific topic.',
+        }, { status: 400 });
+      }
+      await supabase.from('course_units').update({ status: 'in_progress' }).eq('id', unit.id);
+    }
 
     const context = await buildStudentContext();
 
-    const directive = topic?.trim()
-      ? `Design today's lesson on this topic the student requested: "${topic.trim()}".`
-      : `Pick the single most useful next topic for this student — favor their listed gaps, build on previous lessons without repeating them, and stay at their level.`;
+    const directive = unit
+      ? `Today's lesson is Unit ${unit.position} of your course syllabus: "${unit.title}"${unit.description ? ` (${unit.description})` : ''}.`
+      : `Design today's lesson on this topic the student requested: "${topic.trim()}".`;
 
     const raw = await callOpenRouterChat(
       [
@@ -23,8 +55,13 @@ export async function POST(request: NextRequest) {
           role: 'user',
           content: `${directive}
 
-Return ONLY a JSON object:
-{"topic": "<short topic name, e.g. 'Preterite vs imperfect'>", "lesson": "<the full lesson as markdown-lite text: a short explanation with examples (translated), then 4-6 numbered exercises for the student to answer in the chat. End by telling them to answer the exercises one at a time.>"}`,
+Build the lesson in this EXACT shape (it's optimized for getting conversational fast):
+1. REPASO (2 min): if the student has recorded errors, open with 1-2 quick retrieval questions that re-test their most relevant recorded errors. Skip if none.
+2. THE POINT: teach ONE concept or phrase set needed for this milestone, with 2-3 translated examples. Short.
+3. DRILLS: 3-4 numbered production exercises (translate / fill in / answer), climbing in difficulty.
+4. ROLE-PLAY: set a concrete scene for this milestone, assign yourself a character (waiter, taxi driver, neighbor...), give the student their role, then deliver YOUR OPENING LINE IN CHARACTER in Spanish (translated). Tell the student to answer the drills first, then reply to the character to start the scene.
+
+Return ONLY JSON: {"topic": "<short lesson name>", "lesson": "<the full lesson as plain text with the 4 sections>"}`,
         },
       ],
       { json: true, maxTokens: 2500 }
@@ -33,13 +70,12 @@ Return ONLY a JSON object:
     const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
     if (!parsed.topic || !parsed.lesson) throw new Error('Malformed lesson JSON');
 
-    const supabase = getSupabase();
     const { data: profile } = await supabase.from('user_profile').select('cefr_level').maybeSingle();
 
     const [{ error: lessonError }, { error: msgError }] = await Promise.all([
       supabase.from('tutor_lessons').insert({
-        topic: parsed.topic,
-        cefr_level: profile?.cefr_level || null,
+        topic: unit ? `Unit ${unit.position}: ${unit.title}` : parsed.topic,
+        cefr_level: unit?.cefr_level || profile?.cefr_level || null,
         content: parsed.lesson,
       }),
       supabase.from('tutor_messages').insert({
@@ -51,7 +87,11 @@ Return ONLY a JSON object:
     if (lessonError) console.error('Failed to save lesson:', lessonError.message);
     if (msgError) console.error('Failed to save lesson message:', msgError.message);
 
-    return NextResponse.json({ topic: parsed.topic, lesson: parsed.lesson });
+    return NextResponse.json({
+      topic: parsed.topic,
+      lesson: parsed.lesson,
+      unit: unit ? { position: unit.position, title: unit.title, total: unitCount } : null,
+    });
   } catch (error) {
     console.error('Lesson generation error:', error);
     return NextResponse.json({ error: 'Failed to generate lesson' }, { status: 500 });

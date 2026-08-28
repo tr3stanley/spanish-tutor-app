@@ -37,8 +37,8 @@ export async function GET() {
       if (!byLemma.has(item.lemma)) byLemma.set(item.lemma, item);
     }
 
-    const due: unknown[] = [];
-    const fresh: unknown[] = [];
+    const due: VocabRow[] = [];
+    const fresh: VocabRow[] = [];
     for (const [lemma, item] of byLemma) {
       const k = known.get(lemma);
       if (k?.status === 'known' || k?.status === 'ignored') continue;
@@ -47,6 +47,9 @@ export async function GET() {
       if (!k) fresh.push(card);
       else if (!k.srs_due_at || k.srs_due_at <= now) due.push(card);
     }
+
+    // New words: most frequent (most conversationally useful) first
+    fresh.sort((a, b) => ((a.frequency_rank as number) ?? 99999) - ((b.frequency_rank as number) ?? 99999));
 
     const queue = [...due, ...fresh].slice(0, QUEUE_SIZE);
 

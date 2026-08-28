@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import { callOpenRouterChat, ChatMessage } from '@/lib/ai';
-import { PLACEMENT_SYSTEM } from '@/lib/tutor';
+import { PLACEMENT_SYSTEM, generateSyllabus } from '@/lib/tutor';
 
 // One placement interview turn. The client sends the whole interview so far;
 // placement is ephemeral — only the final assessment is persisted (to user_profile).
@@ -51,8 +51,32 @@ export async function POST(request: NextRequest) {
         const { error: saveError } = await supabase.from('tutor_messages').insert(transcriptRows);
         if (saveError) console.error('Failed to save placement transcript:', saveError.message);
 
+        // Seed the error log from the evidence-backed gaps
+        const gaps = Array.isArray(assessment.strengths?.gaps) ? assessment.strengths.gaps : [];
+        const errorRows = gaps
+          .filter((g: { evidence?: string }) => g && typeof g === 'object' && g.evidence)
+          .map((g: { issue?: string; evidence: string; why?: string }) => ({
+            error: g.evidence,
+            correction: null,
+            note: [g.issue, g.why].filter(Boolean).join(': '),
+            source: 'placement',
+          }));
+        if (errorRows.length > 0) {
+          const { error: errLogError } = await supabase.from('error_log').insert(errorRows);
+          if (errLogError) console.error('Failed to seed error log:', errLogError.message);
+        }
+
+        // Build the course syllabus from the fresh profile
+        let unitCount = 0;
+        try {
+          unitCount = await generateSyllabus();
+        } catch (syllabusError) {
+          console.error('Syllabus generation failed (can retry from lesson flow):', syllabusError);
+        }
+
         return NextResponse.json({
           done: true,
+          syllabus_units: unitCount,
           assessment,
           message: assessment.closing_message ||
             `Placement complete — you're around ${assessment.cefr}. Let's get started!`,

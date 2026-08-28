@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase';
+import { callOpenRouterChat } from '@/lib/ai';
 
 export interface UserProfile {
   user_id: string;
@@ -45,7 +46,7 @@ export async function getProfile(): Promise<UserProfile | null> {
 export async function buildStudentContext(): Promise<string> {
   const supabase = getSupabase();
 
-  const [profileRes, listenedRes, lessonsRes, dueRes] = await Promise.all([
+  const [profileRes, listenedRes, lessonsRes, dueRes, errorsRes, unitsRes] = await Promise.all([
     supabase.from('user_profile').select('*').maybeSingle(),
     supabase
       .from('episodes')
@@ -63,12 +64,23 @@ export async function buildStudentContext(): Promise<string> {
       .select('lemma', { count: 'exact', head: true })
       .eq('status', 'learning')
       .lte('srs_due_at', new Date().toISOString()),
+    supabase
+      .from('error_log')
+      .select('error, correction, note')
+      .order('created_at', { ascending: false })
+      .limit(15),
+    supabase
+      .from('course_units')
+      .select('position, title, status')
+      .order('position'),
   ]);
 
   const profile = profileRes.data;
   const listened = listenedRes.data || [];
   const lessons = lessonsRes.data || [];
   const dueCount = dueRes.count ?? 0;
+  const errors = errorsRes.data || [];
+  const units = unitsRes.data || [];
 
   const parts: string[] = [];
 
@@ -81,6 +93,20 @@ export async function buildStudentContext(): Promise<string> {
   } else {
     parts.push('STUDENT PROFILE: no placement done yet — assume intermediate (B1) until told otherwise.');
     parts.push(dialectInstructions(null));
+  }
+
+  if (units.length > 0) {
+    parts.push(
+      'COURSE SYLLABUS (ordered conversational milestones):\n' +
+      units.map(u => `${u.position}. [${u.status}] ${u.title}`).join('\n')
+    );
+  }
+
+  if (errors.length > 0) {
+    parts.push(
+      "STUDENT'S RECENT RECORDED ERRORS (recycle these in reviews and drills until mastered):\n" +
+      errors.map(e => `- "${e.error}" -> "${e.correction}"${e.note ? ` (${e.note})` : ''}`).join('\n')
+    );
   }
 
   if (listened.length > 0) {
@@ -115,7 +141,45 @@ HOW TO TEACH:
 - Give concrete examples and immediately have the student produce something (translate, fill in, answer in Spanish).
 - Reference episodes the student has listened to when relevant ("you heard this construction in...").
 - Keep replies focused and conversational — this is a chat, not an essay. Prefer under 250 words unless running a drill.
-- Always translate any Spanish you use at or above the student's level.`;
+- Always translate any Spanish you use at or above the student's level.
+- If a lesson's role-play is in progress (you'll see it in recent messages), STAY IN CHARACTER and keep the scene going in Spanish; step out only briefly for corrections, then back in.`;
+}
+
+// Generate the ordered course syllabus from the student's placement results.
+// Called after placement; replaces any existing syllabus.
+export async function generateSyllabus(): Promise<number> {
+  const supabase = getSupabase();
+  const context = await buildStudentContext();
+
+  const raw = await callOpenRouterChat(
+    [
+      {
+        role: 'user',
+        content: `${context}
+
+You are designing a Spanish course for this student. The single goal: get them COMFORTABLE IN REAL CONVERSATION as fast as possible. Design 10 ordered units, each one a concrete conversational milestone the student will be able to DO after the unit (e.g. "Order food and handle the waiter's follow-up questions", "Tell a story about your week in past tenses"). Start just below their level to build confidence, end one notch above it. Weight units toward their recorded gaps and goals. Grammar appears only in service of a milestone, never as a unit by itself.
+
+Return ONLY JSON: {"units": [{"title": "<milestone, imperative phrasing>", "description": "<1 sentence: what's covered>", "cefr_level": "<A1-C2>"}]}`,
+      },
+    ],
+    { json: true, temperature: 0.4, maxTokens: 1500 }
+  );
+
+  const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
+  const units = (parsed.units || []).filter((u: { title?: string }) => u.title);
+  if (units.length === 0) throw new Error('Syllabus generation returned no units');
+
+  await supabase.from('course_units').delete().neq('id', 0);
+  const { error } = await supabase.from('course_units').insert(
+    units.map((u: { title: string; description?: string; cefr_level?: string }, i: number) => ({
+      position: i + 1,
+      title: u.title,
+      description: u.description || null,
+      cefr_level: u.cefr_level || null,
+    }))
+  );
+  if (error) throw new Error(error.message);
+  return units.length;
 }
 
 export const PLACEMENT_SYSTEM = `You are a Spanish placement interviewer. Your job: estimate the student's CEFR level (A1-C2) and learn their goals and target dialect through an adaptive interview.

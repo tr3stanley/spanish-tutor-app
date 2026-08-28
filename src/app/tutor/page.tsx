@@ -19,6 +19,17 @@ interface Profile {
   goals: { summary?: string };
 }
 
+interface CourseUnit {
+  position: number;
+  title: string;
+  status: 'pending' | 'in_progress' | 'done';
+}
+
+interface TodayInfo {
+  due_cards: number;
+  syllabus: { total: number; done: number; current: CourseUnit | null; units: CourseUnit[] } | null;
+}
+
 export default function TutorPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -26,7 +37,18 @@ export default function TutorPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [today, setToday] = useState<TodayInfo | null>(null);
+  const [showSyllabus, setShowSyllabus] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const loadToday = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tutor/today');
+      setToday(await res.json());
+    } catch (e) {
+      console.error('Failed to load today summary:', e);
+    }
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,7 +74,7 @@ export default function TutorPage() {
         const data = await res.json();
         setProfile(data.profile);
         if (data.profile?.cefr_level) {
-          await loadChatHistory();
+          await Promise.all([loadChatHistory(), loadToday()]);
         }
       } catch (e) {
         console.error('Failed to load profile:', e);
@@ -60,7 +82,7 @@ export default function TutorPage() {
         setProfileLoaded(true);
       }
     })();
-  }, [loadChatHistory]);
+  }, [loadChatHistory, loadToday]);
 
   const startPlacement = async () => {
     setPlacementMode(true);
@@ -81,8 +103,8 @@ export default function TutorPage() {
     }
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim();
     if (!text || busy) return;
     setInput('');
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
@@ -104,6 +126,7 @@ export default function TutorPage() {
           setPlacementMode(false);
           const profRes = await fetch('/api/tutor/profile');
           setProfile((await profRes.json()).profile);
+          await loadToday();
         }
       } else {
         const res = await fetch('/api/tutor/chat', {
@@ -138,12 +161,19 @@ export default function TutorPage() {
       const data = await res.json();
       if (data.lesson) {
         setMessages(prev => [...prev, { id: `l-${Date.now()}`, role: 'assistant', content: data.lesson, kind: 'lesson' }]);
+        await loadToday();
+      } else if (data.error) {
+        setMessages(prev => [...prev, { id: `l-${Date.now()}`, role: 'assistant', content: data.error }]);
       }
     } catch (e) {
       console.error(e);
     } finally {
       setBusy(false);
     }
+  };
+
+  const startFreeChat = () => {
+    send('Vamos a hacer 5 minutos de conversación libre, solo en español. Empieza tú con una pregunta sobre mi día o mis planes.');
   };
 
   const hasProfile = !!profile?.cefr_level;
@@ -167,22 +197,62 @@ export default function TutorPage() {
               )}
             </div>
             {hasProfile && !placementMode && (
-              <div className="flex items-center space-x-3">
-                <button onClick={startLesson} disabled={busy}
-                  className="cosmic-button px-4 py-2 rounded-lg text-sm disabled:opacity-50">
-                  New Lesson
-                </button>
-                <Link href="/review"
-                  className="bg-white/10 text-gray-200 hover:bg-white/20 px-4 py-2 rounded-lg text-sm transition-colors">
-                  Vocab Review
-                </Link>
-                <button onClick={startPlacement} disabled={busy}
-                  className="text-gray-400 hover:text-gray-200 text-sm">
-                  Retake placement
-                </button>
-              </div>
+              <button onClick={startPlacement} disabled={busy}
+                className="text-gray-400 hover:text-gray-200 text-sm">
+                Retake placement
+              </button>
             )}
           </div>
+
+          {/* Today strip */}
+          {hasProfile && !placementMode && (
+            <div className="glass-card rounded-lg p-3 mb-4 flex flex-wrap items-center gap-3 text-sm">
+              <span className="text-gray-300 font-medium">Today:</span>
+              <Link href="/review"
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  (today?.due_cards ?? 0) > 0
+                    ? 'bg-orange-400/20 text-orange-200 border border-orange-400/40 hover:bg-orange-400/30'
+                    : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                }`}>
+                {(today?.due_cards ?? 0) > 0 ? `${today!.due_cards} cards due` : 'Vocab review'}
+              </Link>
+              <button onClick={startLesson} disabled={busy}
+                className="cosmic-button px-3 py-1.5 rounded-lg disabled:opacity-50">
+                {today?.syllabus?.current
+                  ? `${today.syllabus.current.status === 'in_progress' ? 'Continue' : 'Start'} Unit ${today.syllabus.current.position}: ${today.syllabus.current.title.slice(0, 40)}${today.syllabus.current.title.length > 40 ? '…' : ''}`
+                  : 'New Lesson'}
+              </button>
+              <button onClick={startFreeChat} disabled={busy}
+                className="bg-white/10 text-gray-200 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                5-min chat en español
+              </button>
+              {today?.syllabus && (
+                <button onClick={() => setShowSyllabus(s => !s)}
+                  className="ml-auto text-gray-400 hover:text-gray-200">
+                  Course {today.syllabus.done}/{today.syllabus.total} {showSyllabus ? '▾' : '▸'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Syllabus panel */}
+          {hasProfile && !placementMode && showSyllabus && today?.syllabus && (
+            <div className="glass-card rounded-lg p-4 mb-4">
+              <ol className="space-y-1.5 text-sm">
+                {today.syllabus.units.map(u => (
+                  <li key={u.position} className={`flex items-start space-x-2 ${
+                    u.status === 'done' ? 'text-gray-500 line-through' :
+                    u.status === 'in_progress' ? 'text-purple-300 font-medium' : 'text-gray-300'
+                  }`}>
+                    <span className="flex-shrink-0">
+                      {u.status === 'done' ? '✓' : u.status === 'in_progress' ? '▶' : '○'}
+                    </span>
+                    <span>{u.position}. {u.title}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
 
           {!profileLoaded ? (
             <div className="text-center py-16">

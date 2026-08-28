@@ -11,6 +11,32 @@ export interface ChatMessage {
   content: string;
 }
 
+// OpenRouter drops connections transiently (ETIMEDOUT); retry network errors and 5xx.
+async function postWithRetry(body: string, attempts = 3): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3000',
+          'X-Title': 'Spanish Tutor'
+        },
+        body,
+      });
+      if (response.status >= 500 && attempt < attempts) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await new Promise(r => setTimeout(r, 1500 * attempt));
+    }
+  }
+}
+
 export async function callOpenRouterChat(
   messages: ChatMessage[],
   options: {
@@ -20,22 +46,13 @@ export async function callOpenRouterChat(
     json?: boolean;
   } = {}
 ): Promise<string> {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'Spanish Tutor'
-    },
-    body: JSON.stringify({
-      model: options.model || 'deepseek/deepseek-chat',
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 2000,
-      ...(options.json ? { response_format: { type: 'json_object' } } : {})
-    })
-  });
+  const response = await postWithRetry(JSON.stringify({
+    model: options.model || 'deepseek/deepseek-chat',
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.maxTokens ?? 2000,
+    ...(options.json ? { response_format: { type: 'json_object' } } : {})
+  }));
 
   if (!response.ok) {
     throw new Error(`OpenRouter API error: ${response.statusText}`);
@@ -49,33 +66,7 @@ export async function callOpenRouter(
   prompt: string,
   model: string = 'deepseek/deepseek-chat'
 ): Promise<string> {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'Spanish/Russian Podcast Tutor'
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${response.statusText}`);
-  }
-
-  const data: OpenRouterResponse = await response.json();
-  return data.choices[0]?.message?.content || '';
+  return callOpenRouterChat([{ role: 'user', content: prompt }], { model });
 }
 
 export async function generateLessonPlan(

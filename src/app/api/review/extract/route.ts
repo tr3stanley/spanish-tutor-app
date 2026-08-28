@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSupabase, fetchAllRows } from '@/lib/supabase';
 import { callOpenRouterChat } from '@/lib/ai';
+import frequencyRanks from '@/data/es-frequency.json';
 
 const BATCH = 3; // episodes per call — the client calls repeatedly until remaining = 0
+
+const RANKS: Record<string, number> = frequencyRanks;
 
 // Build the review queue source: extract vocabulary from listened episodes
 // that don't have vocabulary_items yet.
@@ -41,7 +44,7 @@ export async function POST() {
         [
           {
             role: 'user',
-            content: `From this Spanish podcast transcript, extract the 12-15 vocabulary items most worth learning for a ${episode.cefr_level || 'B1'} student: useful words and expressions, not trivial ones (no "hola", "casa") and not proper nouns.
+            content: `From this Spanish podcast transcript, extract the 12-15 vocabulary items most worth learning for a ${episode.cefr_level || 'B1'} student. Prioritize CONVERSATIONAL utility: words and expressions they'd actually say or hear in everyday conversation, including connectors and fillers (o sea, es que, la verdad, ¿verdad?) and common collocations. Skip trivial words (hola, casa), rare literary words, and proper nouns.
 
 TRANSCRIPT:
 ${transcript}
@@ -59,6 +62,7 @@ Return ONLY JSON: {"items": [{"word": "<as it appears>", "lemma": "<dictionary f
           .map((i: Record<string, string>) => ({
             word: i.word,
             lemma: i.lemma.toLowerCase().trim(),
+            frequency_rank: RANKS[i.lemma.toLowerCase().trim()] ?? RANKS[i.word.toLowerCase().trim()] ?? null,
             translation: i.translation,
             part_of_speech: i.part_of_speech || null,
             cefr_level: episode.cefr_level || null,
