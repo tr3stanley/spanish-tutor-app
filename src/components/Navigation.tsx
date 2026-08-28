@@ -50,6 +50,15 @@ export default function Navigation({ onUploadClick }: NavigationProps) {
               <span>🃏</span>
               <span className="font-medium">Review</span>
             </Link>
+            <Link
+              href="/music"
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                pathname === '/music' ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <span>🎵</span>
+              <span className="font-medium">Music</span>
+            </Link>
             {!isHomePage && (
               <Link
                 href="/"

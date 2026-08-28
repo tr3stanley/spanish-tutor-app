@@ -6,8 +6,9 @@ const QUEUE_SIZE = 20;
 interface VocabRow {
   [key: string]: unknown;
   lemma: string;
-  // many-to-one join; supabase-js types it as an array without generated types
+  // many-to-one joins; supabase-js types them as arrays without generated types
   episodes?: { title?: string } | { title?: string }[] | null;
+  songs?: { title?: string; artist?: string } | { title?: string; artist?: string }[] | null;
 }
 
 // The review queue: cards due for review first, then new (never-reviewed) words.
@@ -19,7 +20,7 @@ export async function GET() {
       fetchAllRows<VocabRow>((from, to) =>
         supabase
           .from('vocabulary_items')
-          .select('id, word, lemma, translation, part_of_speech, cefr_level, example, example_translation, episode_id, episodes(title)')
+          .select('id, word, lemma, translation, part_of_speech, cefr_level, example, example_translation, episode_id, episodes(title), songs(title, artist)')
           .order('id')
           .range(from, to)
       ),
@@ -43,7 +44,9 @@ export async function GET() {
       const k = known.get(lemma);
       if (k?.status === 'known' || k?.status === 'ignored') continue;
       const ep = Array.isArray(item.episodes) ? item.episodes[0] : item.episodes;
-      const card = { ...item, episode_title: ep?.title ?? null, episodes: undefined };
+      const song = Array.isArray(item.songs) ? item.songs[0] : item.songs;
+      const sourceTitle = ep?.title ?? (song ? `🎵 ${song.title} — ${song.artist}` : null);
+      const card = { ...item, episode_title: sourceTitle, episodes: undefined, songs: undefined };
       if (!k) fresh.push(card);
       else if (!k.srs_due_at || k.srs_due_at <= now) due.push(card);
     }
