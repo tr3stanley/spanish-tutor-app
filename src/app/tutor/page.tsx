@@ -108,8 +108,15 @@ export default function TutorPage() {
   const [mistakes, setMistakes] = useState<{ groups: MistakeGroup[]; total: number } | null>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsCacheRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (tab === 'chat') messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -332,6 +339,105 @@ export default function TutorPage() {
       console.error(e);
     } finally {
       setExplaining(null);
+    }
+  };
+
+  // Voice input: record with the browser mic, transcribe server-side, drop the
+  // text into the input box so the student can check what was heard before sending.
+  const toggleRecording = async () => {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setRecording(false);
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        if (blob.size < 2000) return;
+        setTranscribing(true);
+        try {
+          const fd = new FormData();
+          fd.append('audio', blob, 'recording.webm');
+          const res = await fetch('/api/tutor/transcribe', { method: 'POST', body: fd });
+          const data = await res.json();
+          if (data.text) {
+            setInput(prev => (prev ? prev.trimEnd() + ' ' : '') + data.text);
+            textareaRef.current?.focus();
+          }
+        } catch (e) {
+          console.error('Transcription failed:', e);
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch (e) {
+      console.error('Microphone unavailable:', e);
+      alert('Could not access the microphone. Check browser permissions.');
+    }
+  };
+
+  const stopSpeaking = useCallback(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    try { window.speechSynthesis?.cancel(); } catch { /* not supported */ }
+    setSpeakingId(null);
+  }, []);
+
+  useEffect(() => () => {
+    stopSpeaking();
+    for (const url of ttsCacheRef.current.values()) URL.revokeObjectURL(url);
+  }, [stopSpeaking]);
+
+  // Voice output: Azure audio when the server has a key, browser speech otherwise.
+  const speak = async (id: string, text: string) => {
+    if (speakingId === id) {
+      stopSpeaking();
+      return;
+    }
+    stopSpeaking();
+    setSpeakingId(id);
+    const clean = text.replace(/\*\*/g, '');
+    try {
+      let url = ttsCacheRef.current.get(id);
+      if (!url) {
+        const res = await fetch('/api/tutor/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: clean }),
+        });
+        if ((res.headers.get('content-type') || '').includes('audio')) {
+          url = URL.createObjectURL(await res.blob());
+          ttsCacheRef.current.set(id, url);
+        }
+      }
+      if (url) {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => setSpeakingId(cur => (cur === id ? null : cur));
+        await audio.play();
+      } else if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(clean);
+        const esVoice = window.speechSynthesis.getVoices().find(v => /^es[-_]/i.test(v.lang));
+        if (esVoice) u.voice = esVoice;
+        u.lang = esVoice?.lang || 'es-ES';
+        u.rate = 0.9;
+        u.onend = () => setSpeakingId(cur => (cur === id ? null : cur));
+        u.onerror = () => setSpeakingId(cur => (cur === id ? null : cur));
+        window.speechSynthesis.speak(u);
+      } else {
+        setSpeakingId(null);
+      }
+    } catch (e) {
+      console.error('Playback failed:', e);
+      setSpeakingId(null);
     }
   };
 
@@ -595,6 +701,13 @@ export default function TutorPage() {
                             <div className="text-emerald-300 text-xs font-semibold mb-2">📚 LESSON</div>
                           )}
                           {renderRich(m.content)}
+                          {m.role === 'assistant' && (
+                            <button onClick={() => speak(m.id, m.content)}
+                              className="block mt-2 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                              title="Hear this out loud">
+                              {speakingId === m.id ? '⏹ Stop' : '🔊 Listen'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -640,6 +753,15 @@ export default function TutorPage() {
                     rows={2}
                     className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-400 focus:outline-none resize-none"
                   />
+                  <button type="button" onClick={toggleRecording} disabled={busy || transcribing}
+                    className={`px-4 rounded-lg border transition-colors disabled:opacity-50 ${
+                      recording
+                        ? 'bg-red-500/30 border-red-400/60 text-red-200 animate-pulse'
+                        : 'bg-white/10 border-white/20 text-gray-300 hover:bg-white/20'
+                    }`}
+                    title={recording ? 'Stop recording' : 'Speak instead of typing'}>
+                    {transcribing ? '…' : recording ? '⏹' : '🎤'}
+                  </button>
                   <button type="submit" disabled={busy || !input.trim()}
                     className="cosmic-button px-5 rounded-lg disabled:opacity-50">
                     Send
