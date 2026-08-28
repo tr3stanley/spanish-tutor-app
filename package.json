@@ -11,14 +11,11 @@
   "dependencies": {
     "@types/multer": "^2.0.0",
     "better-sqlite3": "^12.2.0",
-    "child_process": "^1.0.2",
-    "fs": "^0.0.1-security",
     "googleapis": "^160.0.0",
     "multer": "^2.0.2",
     "next": "15.5.12",
     "node-id3": "^0.2.9",
     "openai": "^5.22.0",
-    "path": "^0.12.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "sqlite": "^5.1.1",
@@ -38,6 +35,9 @@
     "typescript": "^5"
   },
   "pnpm": {
-    "approvedBuilds": ["better-sqlite3", "sqlite3"]
+    "approvedBuilds": [
+      "better-sqlite3",
+      "sqlite3"
+    ]
   }
 }

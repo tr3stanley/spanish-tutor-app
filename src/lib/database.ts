@@ -34,6 +34,11 @@ export async function getDatabase(): Promise<Database> {
       lesson_generated BOOLEAN DEFAULT FALSE,
       folder_id INTEGER,
       listened BOOLEAN DEFAULT FALSE,
+      cefr_level TEXT,
+      topic TEXT,
+      dialect TEXT,
+      freq_coverage REAL,
+      classified_at DATETIME,
       FOREIGN KEY (folder_id) REFERENCES folders (id)
     );
 
@@ -91,6 +96,11 @@ export interface Podcast {
   lesson_generated?: boolean;
   folder_id?: number;
   listened?: boolean;
+  cefr_level?: string;
+  topic?: string;
+  dialect?: string;
+  freq_coverage?: number;
+  classified_at?: string;
 }
 
 export interface Transcript {

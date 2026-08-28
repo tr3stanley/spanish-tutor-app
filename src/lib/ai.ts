@@ -80,13 +80,6 @@ Example: "Sentence from transcript in ${languageName}" (English translation of t
 Usage notes: Additional context, alternative meanings, or common collocations\\n
 Alternative meanings: if any\\n\\n
 
-CRITICAL JSON FORMATTING RULES:
-- grammarRules and vocabulary MUST be valid JSON strings with proper escaping
-- Do NOT include unescaped quotes or newlines inside JSON string values
-- Use \\n for line breaks and \\" for quotes inside JSON strings
-- NO markdown asterisks (**) inside JSON string values - use plain text instead
-- The entire response must be valid, parseable JSON
-
 Make this educational and engaging for an intermediate ${languageName} learner.
 `;
 

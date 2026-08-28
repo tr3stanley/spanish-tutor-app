@@ -21,13 +21,20 @@ interface Podcast {
   folder_id?: number;
   folder_name?: string;
   listened?: boolean;
+  cefr_level?: string;
+  dialect?: string;
+  topic?: string;
 }
+
+const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 export default function Home() {
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDownloadManager, setShowDownloadManager] = useState(false);
+  const [levelFilter, setLevelFilter] = useState('all');
+  const [dialectFilter, setDialectFilter] = useState('all');
 
   const fetchPodcasts = async () => {
     try {
@@ -50,6 +57,14 @@ export default function Home() {
   const handleUploadSuccess = () => {
     fetchPodcasts();
   };
+
+  const availableLevels = CEFR_ORDER.filter(l => podcasts.some(p => p.cefr_level === l));
+  const availableDialects = [...new Set(podcasts.map(p => p.dialect).filter((d): d is string => !!d))].sort();
+
+  const filteredPodcasts = podcasts.filter(p =>
+    (levelFilter === 'all' || p.cefr_level === levelFilter) &&
+    (dialectFilter === 'all' || p.dialect === dialectFilter)
+  );
 
   // Statistics
   const totalPodcasts = podcasts.length;
@@ -130,11 +145,35 @@ export default function Home() {
                 Podcast Library
               </h2>
               {totalPodcasts > 0 && (
-                <div className="text-sm text-gray-300">
-                  Organized in folders • Click to expand
+                <div className="flex items-center space-x-3">
+                  <select
+                    value={levelFilter}
+                    onChange={(e) => setLevelFilter(e.target.value)}
+                    className="bg-white/10 border border-white/20 text-white text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="all" className="bg-gray-900">All levels</option>
+                    {availableLevels.map(l => (
+                      <option key={l} value={l} className="bg-gray-900">{l}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={dialectFilter}
+                    onChange={(e) => setDialectFilter(e.target.value)}
+                    className="bg-white/10 border border-white/20 text-white text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-400"
+                  >
+                    <option value="all" className="bg-gray-900">All dialects</option>
+                    {availableDialects.map(d => (
+                      <option key={d} value={d} className="bg-gray-900">{d.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
+            {(levelFilter !== 'all' || dialectFilter !== 'all') && (
+              <div className="mt-2 text-sm text-gray-300">
+                Showing {filteredPodcasts.length} of {totalPodcasts} episodes
+              </div>
+            )}
           </div>
 
           <div className="p-6">
@@ -145,7 +184,7 @@ export default function Home() {
               </div>
             ) : (
               <FolderPodcastList
-                podcasts={podcasts}
+                podcasts={filteredPodcasts}
                 onPodcastDeleted={fetchPodcasts}
               />
             )}

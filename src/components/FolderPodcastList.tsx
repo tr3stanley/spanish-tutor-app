@@ -16,7 +16,19 @@ interface Podcast {
   folder_id?: number;
   folder_name?: string;
   listened?: boolean;
+  cefr_level?: string;
+  dialect?: string;
+  topic?: string;
 }
+
+const LEVEL_COLORS: Record<string, string> = {
+  A1: 'bg-green-400/20 text-green-300 border-green-400/30',
+  A2: 'bg-emerald-400/20 text-emerald-300 border-emerald-400/30',
+  B1: 'bg-yellow-400/20 text-yellow-300 border-yellow-400/30',
+  B2: 'bg-orange-400/20 text-orange-300 border-orange-400/30',
+  C1: 'bg-red-400/20 text-red-300 border-red-400/30',
+  C2: 'bg-purple-400/20 text-purple-300 border-purple-400/30',
+};
 
 interface Folder {
   id: number;
@@ -411,6 +423,17 @@ function PodcastItem({
         </div>
 
         <div className="flex items-center space-x-4 text-sm text-gray-400">
+          {podcast.cefr_level && (
+            <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${LEVEL_COLORS[podcast.cefr_level] || 'bg-white/10 text-gray-300 border-white/20'}`}>
+              {podcast.cefr_level}
+            </span>
+          )}
+          {podcast.dialect && podcast.dialect !== 'unknown' && (
+            <span className="text-xs">{podcast.dialect.replace(/_/g, ' ')}</span>
+          )}
+          {podcast.topic && (
+            <span className="text-xs italic">{podcast.topic}</span>
+          )}
           <span>{new Date(podcast.created_at).toLocaleDateString()}</span>
           {podcast.has_lesson ? (
             <span className="text-green-600 font-medium">✓ Ready</span>
