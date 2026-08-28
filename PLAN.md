@@ -75,6 +75,24 @@ The core product. Cheap model (DeepSeek via OpenRouter) for volume work; better 
 - TTS: Azure free tier (500k chars/mo ≈ one novel, es-CR/es-MX voices — same infra as Phase 4); if volume outgrows it, local **Kokoro** on the Mac ($0 at any volume, Spanish voices, fits ingestion-stays-local).
 - EPUB import (JSZip + epub.js) stays as a stretch item if text-only reading is ever wanted.
 
+### Phase 9 — Mobile navigation + PWA ($0)
+- The app is used on a phone but the nav has **no responsive classes at all**: one flex row with 6 items (Instructor, Review, Music, Home, Upload, Sign out) that squashes on a small screen.
+- Bottom tab bar for the daily loop (Library, Instructor, Review, Music), mobile-only; keep the top bar for desktop. Upload/Sign out demote to a "More" sheet — occasional actions don't deserve thumb real estate.
+- Needs `env(safe-area-inset-bottom)` for the iPhone home indicator, and page bottom padding so content clears the bar.
+- Add a PWA manifest + viewport/theme-color metadata (currently missing entirely): home-screen install, full-screen launch, no browser chrome. Pairs with the offline storage + DownloadManager already built.
+- Later: persistent mini-player docked above the tab bar so audio keeps playing while browsing.
+
+### Phase 10 — Upload hardening ($0)
+- **Bug: file upload is broken in production.** `/api/upload` writes to a local `uploads/` dir — fine on the Mac, impossible on Vercel (read-only, ephemeral FS). Fix: upload to Supabase Storage, same mechanism the Phase 8 stories proved.
+- **Gap: uploads skip level classification.** Pipeline scripts classify everything; manual uploads land with no CEFR level, so they miss level filters and the tutor can't reason about them. Wire the same classify call into the upload path.
+- Uploaded episodes currently land in the SHARED library (any signed-in user sees them) — correct for family, wrong for a public product. See the legal section.
+
+### Phase 11 — More content (mostly no new code)
+- **Cheapest win, zero code:** the 8 configured feeds hold 135–431 episodes each and only 3 per show were pulled. `node scripts/sync-podcasts.mjs --limit 25` adds ~200 episodes for a couple dollars of Groq time.
+- Move the `SHOWS` array out of the script into a table + small admin UI so shows can be added without editing code.
+- **YouTube via yt-dlp** — where the best comprehensible input lives (Dreaming Spanish especially, which is YouTube-native so the RSS pipeline can't see it). Bigger legal step than podcast RSS; see below.
+- Scheduled sync (GitHub Actions cron or Vercel cron → API route) so new episodes arrive without being asked for.
+
 _(Dialect packs are no longer a phase — the tutor side shipped in Phase 3; the TTS voice choice lands in Phase 4 and content filtering by dialect already exists in the library.)_
 
 ## Deferred add-ons
@@ -100,11 +118,33 @@ _(Dialect packs are no longer a phase — the tutor side shipped in Phase 3; the
 
 Cost rules: voice only where it matters; push-to-talk not open mic (when realtime voice arrives); mini/cheap models for volume work; ride free tiers deliberately; keep ingestion local.
 
-## Content legality (family now, marketed later)
+## Content legality — family now, and the path to viable
 
-- **Family stage (Phase 6):** invite-only, free, not publicly accessible — content shared within the group. The transcribed copyrighted shows (StoryLearning etc.) technically remain personal-use; a private 4-person family app is a deliberate, low-risk call by Thomas, not a marketable posture.
-- **Marketed stage — the flip is designed in:** `owner_id` on content tables from Phase 6 means copyrighted items go owner-only with a config change. The shared "legal shelf" is everything we can serve to strangers: public-domain audiobooks (LibriVox), our own LLM-generated graded stories + TTS audio, music via embeds, CC-licensed podcasts, and each user's own uploads (their transcriptions belong to their account).
-- Also at marketed stage: paid Supabase tier; voice minutes and LLM spend metered per user.
+### Three tiers, honestly
+
+1. **Safe to commercialize today:** LibriVox audiobooks (public domain, explicitly re-hostable), our own LLM-generated graded stories + TTS narration, Project Gutenberg texts, and anything a user uploads that they own.
+2. **Defensible but not risk-free:** podcast episodes. Streaming from the publisher's own RSS feed is what every podcast app does and is well accepted. What makes us different is that we store **transcripts** (derivative works) and generate **lessons** (commentary/education, which leans more defensible).
+3. **Cannot ship commercially as-is:** the 724 StoryLearning episodes and other transcribed paid shows, and stored full song lyrics. Music publishers are the most litigious rights holders in this space and full-lyric reproduction is their favourite target.
+
+### The flip (designed in, not yet thrown)
+
+`owner_id` exists on `episodes`/`folders`/`songs` (Phases 6–7) precisely so tier-3 content can become owner-only with a policy change rather than a rebuild. Today every signed-in user shares all content — right for four family members, wrong for strangers.
+
+### If it goes public: bring-your-own-content
+
+Sell the tutor — placement, error tracking, categorized mistake explainers, block-based syllabus, SRS, lesson engine — and let users supply the audio. This is what LingQ and Language Reactor do and it is why they can operate. The **legal shelf** ships as the built-in starter library (LibriVox + generated stories + music embeds + CC-licensed podcasts); everything copyrighted becomes per-user content only its uploader can see.
+
+### Lyrics: keep the teaching, drop the reproduction
+
+We currently store and display complete lyrics — the one thing that cannot be commercialized. But the teaching value isn't in the reproduction: it's the slang glossary, cultural notes, vocabulary, and short quoted lines under analysis, all much closer to fair-use commentary. A commercial version keeps the study sheet, quotes only the lines it is actively explaining, and links out to a licensed lyrics site for the full text. Loses the full-translation view, keeps nearly all the learning. (Licensing via LyricFind/Musixmatch is the paid alternative.)
+
+### Podcasts: ask, don't assume
+
+Prefer feeds that publish their own transcripts (Radio Ambulante already does — those imports cost $0 and carry no derivative-work question). For the rest, **just ask**: Español con Juan, No Hay Tos and similar are small independent operations that often welcome the exposure, and a revenue share or affiliate arrangement is a normal conversation. YouTube ingestion (Dreaming Spanish) raises the stakes and should be permission-first.
+
+### Also at marketed stage
+- Paid Supabase tier; voice minutes and LLM spend metered per user.
+- Storage costs move from "free tier" to real once user uploads scale.
 
 ## Supabase MCP setup (done 2026-08-27)
 
@@ -138,6 +178,10 @@ Cost rules: voice only where it matters; push-to-talk not open mic (when realtim
 - [x] **Phase 7 done (2026-08-28).** **Groq fallback in the app** (`src/lib/groq-transcribe.ts`): `processing.ts` now uses local whisper-cli where it exists, Groq whisper-large-v3-turbo on Vercel or when local transcription fails — so uploads work away from the Mac. Upload/reprocess routes await the work on Vercel (functions freeze after the response) with `maxDuration = 300`. **`scripts/sync-podcasts.mjs`**: curated feed list chosen to fill level gaps (Chill Spanish A1, ¡Cuéntame! A2, Simple Stories A2, Duolingo B1, Español con Juan B2, Hoy Hablamos B1, No Hay Tos B2/mexican, Radio Ambulante C1), resolved by name through the free iTunes Search API; uses the publisher's `podcast:transcript` (SRT/VTT parsed to segments) when offered, else Groq; generates the same lesson format as the app; auto-creates level-tagged folders; skips episodes already present; deletes the episode row if any step fails so no half-imported episodes linger. Flags: `--limit N`, `--show "name"`, `--dry-run`. Gotcha found and fixed: Groq's `url` parameter does NOT follow podcast-CDN 302 redirects, so the script downloads and downsamples (ffmpeg 16kHz mono FLAC) before uploading bytes. **Scripts now sign in as a pipeline service account** (`PIPELINE_EMAIL`/`PIPELINE_PASSWORD` in .env.local, user `pipeline@spanish-tutor.internal`) since Phase 6's RLS blocks anonymous writes. Also added `owner_id` to episodes/folders (null = original library) and renamed `songs.user_id` → `owner_id` for the marketed-later flip. Library re-transcription with large-v3-turbo (~$12) remains optional and unrun. **First sync run added 36 episodes across all 8 shows** (all with transcripts + lessons), moving the level spread from A1 0 / A2 89 / B1 636 / B2 12 / C1 4 to **A1 7 / A2 97 / B1 644 / B2 19 / C1 10** — 777 episodes total. Two more encoding gotchas found the hard way: 16kHz FLAC is lossless and still blew past Groq's 25MB limit on most full-length episodes (now Opus 16kbps, ~7MB/hour), and podcast MP3s with embedded cover art broke the ogg muxer (now `-vn`). Re-run `node scripts/sync-podcasts.mjs` any time to pull newly published episodes.
 
 - [x] **Phase 8 done (2026-08-28).** Audiobooks, both halves, reusing the episode/player stack so they inherit transcript + click-to-translate + lessons + vocab for free. **`scripts/import-librivox.mjs`**: public-domain Spanish audiobooks discovered via Archive.org search (`collection:librivoxaudio AND language:spa` — note LibriVox's own API ignores its `language` filter, and Archive.org indexes Spanish as `spa`, not `Spanish`), most-downloaded first since popularity tracks reading quality; chapters become episodes streamed from Archive.org (we store only the URL), transcribed with Groq and level-tagged individually. Aesop's fables land at A2, Don Quijote at B2/C1 — the per-chapter classification is what makes one book span levels usefully. **`scripts/generate-stories.mjs`**: an LLM writes level-graded stories, Azure neural TTS narrates them **sentence by sentence**, so each sentence's measured audio duration gives an exact transcript timing — no Whisper round-trip and perfect click-to-seek sync (verified: last segment 46.94s vs 46.9435s actual). A 400ms SSML break is synthesized *inside* each sentence so concatenation stays seamless and timings stay honest. MP3s live in a public Supabase Storage bucket `story-audio` (free tier, range requests + CORS confirmed working, so seeking works). **`scripts/lib/pipeline.mjs`** now holds the shared pipeline helpers (auth, Groq transcription with chunking, lesson generation, classification, entity decoding) used by all three content scripts. First run: 20 LibriVox chapters across 4 books + 11 graded stories (A1/A2/B1). **Library now 808 episodes — A1 12, A2 110, B1 647, B2 25, C1 14, with zero episodes missing a transcript or lesson.** Re-run either script any time; stories are told not to repeat existing topics.
+
+- [x] **Phase 10 done (2026-08-28) — upload fix.** `/api/upload` now stores uploaded files in the Supabase Storage bucket `episode-audio` (public, 200MB cap, audio MIME allowlist, objects namespaced per user id) instead of writing to a local `uploads/` dir, which silently broke every file upload in production. Uploads also classify now: `classifyEpisode()` in `processing.ts` tags CEFR level + topic + dialect from the finished transcript (Spanish only, and skipped if a level was already set), so uploads stop landing invisible to the level filters and the tutor. On Vercel the route awaits processing (functions freeze after the response) with `maxDuration = 300`; locally it still fires and forgets to whisper. Tested end to end with a real MP3: stored in Storage, transcribed via Groq, lesson generated, tagged A2 / "Mexican food traditions" / mexican — then the test episode was deleted.
+
+- [x] **Phase 9 done (2026-08-28) — mobile nav + PWA.** `BottomNav` renders a fixed 5-tab bar on mobile only (Library, Instructor, Review, Music, More) with `env(safe-area-inset-bottom)` padding and a slide-up More sheet holding Upload and Sign out. The top bar keeps the brand on mobile but its link cluster is now `hidden md:flex`, so desktop is unchanged. `Navigation` renders `BottomNav` itself, so every page that already used it got the tab bar for free. Body gets `padding-bottom` under 768px so content clears the bar. PWA: `manifest.webmanifest` (standalone, portrait, brand theme `#0b0a1f`, shortcuts to Instructor/Review/Music), generated brand-gradient microphone icons (192/512/maskable-512/apple-touch), plus `viewport` metadata with `viewportFit: 'cover'` and `appleWebApp` for full-screen iOS launch — none of which existed before. The middleware matcher already excluded `.png`/`.webmanifest`, so the manifest and icons load pre-auth as browsers require. Verified: manifest + icons serve 200, viewport/theme-color meta present, tab bar renders on every authenticated page.
 
 ### Phase 1 findings (carry into Phase 2)
 

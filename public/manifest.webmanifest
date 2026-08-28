@@ -1,0 +1,23 @@
+{
+  "name": "Podcast Tutor — Learn Spanish",
+  "short_name": "Podcast Tutor",
+  "description": "Learn Spanish with podcasts, an AI instructor, and spaced-repetition vocabulary review",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0a1f",
+  "theme_color": "#0b0a1f",
+  "categories": ["education"],
+  "lang": "es",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Instructor", "url": "/tutor" },
+    { "name": "Review", "url": "/review" },
+    { "name": "Music", "url": "/music" }
+  ]
+}

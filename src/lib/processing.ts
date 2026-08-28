@@ -1,7 +1,42 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { processAudioWithWhisper, TranscriptSegment } from '@/lib/whisper';
 import { transcribeWithGroq } from '@/lib/groq-transcribe';
-import { generateLessonPlan } from '@/lib/ai';
+import { generateLessonPlan, callOpenRouterChat } from '@/lib/ai';
+
+// CEFR level + topic + dialect, same contract as scripts/classify-supabase.mjs.
+// Without this an uploaded episode has no level, so it misses the library's
+// level filters and the tutor can't reason about its difficulty.
+async function classifyEpisode(title: string, transcript: string) {
+  try {
+    const raw = await callOpenRouterChat(
+      [
+        {
+          role: 'user',
+          content: `You are classifying Spanish-language audio for a language-learning library.
+
+TITLE: ${title}
+
+TRANSCRIPT EXCERPT (auto-transcribed, may contain errors):
+${transcript.slice(0, 6000)}
+
+Return ONLY a JSON object, no markdown, no explanation:
+{"cefr": "<A1|A2|B1|B2|C1|C2 - difficulty for a Spanish LEARNER>", "topic": "<2-4 word English topic label>", "dialect": "<mexican|castilian|rioplatense|caribbean|andean|central_american|neutral_latam|mixed|unknown>"}`,
+        },
+      ],
+      { json: true, temperature: 0.1, maxTokens: 100 }
+    );
+    const p = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
+    return {
+      cefr_level: p.cefr || null,
+      topic: p.topic || null,
+      dialect: p.dialect || null,
+      classified_at: new Date().toISOString(),
+    };
+  } catch (e) {
+    console.error('Classification failed (non-fatal):', e);
+    return null;
+  }
+}
 
 // Local whisper-cli where it exists (the Mac, free); Groq whisper-large-v3-turbo
 // on Vercel or when local transcription fails ($0.04/hr, needs GROQ_API_KEY).
@@ -47,7 +82,20 @@ export async function processEpisode(
     if (segError) throw new Error(`saving segments: ${segError.message}`);
 
     const fullTranscript = segments.map(s => s.text).join(' ');
-    const lesson = await generateLessonPlan(fullTranscript, language);
+
+    const { data: episode } = await supabase
+      .from('episodes')
+      .select('title, cefr_level')
+      .eq('id', episodeId)
+      .maybeSingle();
+
+    const [lesson, tags] = await Promise.all([
+      generateLessonPlan(fullTranscript, language),
+      // Spanish-only: the classifier's levels and dialects don't apply to Russian.
+      language === 'spanish' && !episode?.cefr_level
+        ? classifyEpisode(episode?.title || '', fullTranscript)
+        : Promise.resolve(null),
+    ]);
 
     const { error: lessonError } = await supabase.from('lessons').insert({
       episode_id: episodeId,
@@ -59,7 +107,7 @@ export async function processEpisode(
 
     await supabase
       .from('episodes')
-      .update({ processed_at: new Date().toISOString(), lesson_generated: true })
+      .update({ processed_at: new Date().toISOString(), lesson_generated: true, ...(tags || {}) })
       .eq('id', episodeId);
 
     console.log(`Episode ${episodeId} processed successfully!`);

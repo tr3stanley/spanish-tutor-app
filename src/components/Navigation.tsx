@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { getBrowserSupabase } from '@/lib/supabase-browser';
+import BottomNav from '@/components/BottomNav';
 
 interface NavigationProps {
   onUploadClick?: () => void;
@@ -44,8 +45,8 @@ export default function Navigation({ onUploadClick }: NavigationProps) {
             </div>
           </Link>
 
-          {/* Navigation Items */}
-          <div className="flex items-center space-x-4">
+          {/* Navigation Items — mobile uses the bottom tab bar instead */}
+          <div className="hidden md:flex items-center space-x-4">
             <Link
               href="/tutor"
               className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
@@ -111,6 +112,7 @@ export default function Navigation({ onUploadClick }: NavigationProps) {
           </div>
         </div>
       </div>
+      <BottomNav onUploadClick={onUploadClick} />
     </nav>
   );
 }

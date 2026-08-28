@@ -258,3 +258,10 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(159, 122, 234, 0.8);
 }
+
+/* Clear the fixed mobile tab bar (hidden at md and up, where the top nav returns) */
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+}
