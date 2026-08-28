@@ -368,6 +368,8 @@ export default function TutorPage() {
           if (data.text) {
             setInput(prev => (prev ? prev.trimEnd() + ' ' : '') + data.text);
             textareaRef.current?.focus();
+          } else if (data.error) {
+            alert(data.error);
           }
         } catch (e) {
           console.error('Transcription failed:', e);

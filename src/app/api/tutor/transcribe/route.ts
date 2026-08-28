@@ -49,6 +49,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ text: (data.text || '').trim(), engine: 'groq' });
     }
 
+    if (process.env.VERCEL) {
+      return NextResponse.json(
+        { error: 'Voice input needs a GROQ_API_KEY set in the Vercel environment' },
+        { status: 503 }
+      );
+    }
+
     // Local fallback: convert whatever the browser recorded to 16kHz wav, then whisper-cli.
     const tempDir = path.join(process.cwd(), 'temp-downloads');
     await fs.mkdir(tempDir, { recursive: true });
