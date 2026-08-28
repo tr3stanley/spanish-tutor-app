@@ -3,6 +3,8 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { getAuth, unauthorized } from '@/lib/auth';
 import { processEpisode } from '@/lib/processing';
 
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   try {
     const auth = await getAuth(request);
@@ -29,7 +31,11 @@ export async function POST(request: Request) {
       });
     }
 
-    reprocessBatchInBackground(supabase, failedPodcasts);
+    if (process.env.VERCEL) {
+      await reprocessBatchInBackground(supabase, failedPodcasts.slice(0, 5));
+    } else {
+      reprocessBatchInBackground(supabase, failedPodcasts);
+    }
 
     return NextResponse.json({
       success: true,

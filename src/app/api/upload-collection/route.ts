@@ -3,6 +3,8 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { getAuth, unauthorized } from '@/lib/auth';
 import { processEpisode } from '@/lib/processing';
 
+export const maxDuration = 300;
+
 interface CollectionFile {
   name: string;
   title: string;
@@ -50,8 +52,13 @@ export async function POST(request: NextRequest) {
 
     const podcastIds = (inserted || []).map(e => e.id);
 
-    // Start background processing in batches
-    processBatchInBackground(supabase, files, podcastIds, language);
+    // On Vercel the function freezes after the response, so await the work
+    // there (Groq is fast); locally, fire-and-forget while whisper grinds.
+    if (process.env.VERCEL) {
+      await processBatchInBackground(supabase, files, podcastIds, language);
+    } else {
+      processBatchInBackground(supabase, files, podcastIds, language);
+    }
 
     return NextResponse.json({
       success: true,

@@ -1,9 +1,29 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { processAudioWithWhisper } from '@/lib/whisper';
+import { processAudioWithWhisper, TranscriptSegment } from '@/lib/whisper';
+import { transcribeWithGroq } from '@/lib/groq-transcribe';
 import { generateLessonPlan } from '@/lib/ai';
 
-// Transcribe an episode with local Whisper, save segments + lesson, mark processed.
-// Runs only where whisper-cpp exists (local Mac), not on Vercel.
+// Local whisper-cli where it exists (the Mac, free); Groq whisper-large-v3-turbo
+// on Vercel or when local transcription fails ($0.04/hr, needs GROQ_API_KEY).
+async function transcribe(
+  filepath: string,
+  language: 'spanish' | 'russian'
+): Promise<TranscriptSegment[]> {
+  const hasGroq = !!process.env.GROQ_API_KEY;
+  if (process.env.VERCEL) {
+    if (!hasGroq) throw new Error('Transcription on Vercel requires GROQ_API_KEY');
+    return transcribeWithGroq(filepath, language);
+  }
+  try {
+    return await processAudioWithWhisper(filepath, language);
+  } catch (error) {
+    if (!hasGroq) throw error;
+    console.log('Local Whisper failed, falling back to Groq:', error);
+    return transcribeWithGroq(filepath, language);
+  }
+}
+
+// Transcribe an episode, save segments + lesson, mark processed.
 export async function processEpisode(
   supabase: SupabaseClient,
   episodeId: number,
@@ -11,9 +31,9 @@ export async function processEpisode(
   language: 'spanish' | 'russian'
 ): Promise<void> {
   try {
-    console.log(`Processing episode ${episodeId} with Whisper...`);
+    console.log(`Processing episode ${episodeId}...`);
 
-    const segments = await processAudioWithWhisper(filepath, language);
+    const segments = await transcribe(filepath, language);
 
     const { error: segError } = await supabase.from('transcript_segments').insert(
       segments.map(s => ({
