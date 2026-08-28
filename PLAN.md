@@ -109,6 +109,8 @@ Cost rules: voice only where it matters; push-to-talk not open mic (when realtim
 
 - [x] **Instructor v2 + cleanup (2026-08-27):** placement now generates a 10-unit conversational syllabus (course_units table) that "New Lesson" walks in order; fixed lesson shape (error review → concept → drills → in-character role-play continued in chat); error_log table seeded by placement gaps and fed by per-turn correction extraction in chat — lessons recycle real mistakes; vocab frequency-ranked (src/data/es-frequency.json top-5k), new cards served most-frequent-first, extraction favors conversational words; Today strip + syllabus panel on /tutor with 5-min free-chat button; OpenRouter retry on transient failures; removed 7 unused deps + dead YouTube code (deps now supabase-js/next/react only); numeric-aware episode ordering in folders. End-to-end tested, test data wiped — placement is fresh.
 
+- [x] **Instructor v3 + level clarity (2026-08-28):** plain-language level labels everywhere (src/lib/levels.ts; library legend, labeled filters/badges/header). Mistakes now categorized (fixed taxonomy) with a My Mistakes tab: grouped patterns + on-demand cached explainers built from the student's own sentences (error_explainers table). Syllabus is block-based: finishing a block generates the next 10 units from the live error log; units complete only via Complete Unit (tutor announces when earned), repeat lessons continue the same unit with fresh drills. Lessons tab (reopen any past lesson), markdown-lite chat rendering, day separators, quick-reply chips, placement resume via localStorage.
+
 ### Phase 1 findings (carry into Phase 2)
 
 - CEFR distribution: A2 89, B1 634, B2 13, C1 3. Dialects: neutral_latam 458, castilian 168, mexican 77, andean 27, rioplatense 8.
