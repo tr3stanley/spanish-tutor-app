@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     if (error) console.error('Failed to save tutor messages:', error.message);
 
     await recordErrors(supabase, message.trim(), reply);
+    await supabase.rpc('bump_activity', { p_chat_messages: 1 });
 
     return NextResponse.json({ response: reply });
   } catch (error) {

@@ -93,6 +93,8 @@ Return ONLY JSON: {"topic": "<short lesson name>", "lesson": "<the full lesson a
     if (lessonError) console.error('Failed to save lesson:', lessonError.message);
     if (msgError) console.error('Failed to save lesson message:', msgError.message);
 
+    await supabase.rpc('bump_activity', { p_lessons: 1 });
+
     return NextResponse.json({
       topic: parsed.topic,
       lesson: parsed.lesson,

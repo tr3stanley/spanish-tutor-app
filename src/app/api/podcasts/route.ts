@@ -22,18 +22,25 @@ export async function GET(request: Request) {
           .range(from, to)
       ),
       // per-user listened flags (RLS scopes to the signed-in user)
-      fetchAllRows<{ episode_id: number }>((from, to) =>
-        supabase.from('user_episodes').select('episode_id').eq('listened', true).order('episode_id').range(from, to)
+      fetchAllRows<{ episode_id: number; listened: boolean; liked: boolean; position_seconds: number }>((from, to) =>
+        supabase.from('user_episodes')
+          .select('episode_id, listened, liked, position_seconds')
+          .order('episode_id').range(from, to)
       ),
     ]);
 
-    const listenedIds = new Set(listenedRes.map(r => r.episode_id));
-    const podcasts = data.map(({ folders, lessons, ...episode }) => ({
+    const progressById = new Map(listenedRes.map(r => [r.episode_id, r]));
+    const podcasts = data.map(({ folders, lessons, ...episode }) => {
+      const prog = progressById.get(episode.id as number);
+      return {
       ...episode,
-      listened: listenedIds.has(episode.id as number),
+      listened: prog?.listened ?? false,
+      liked: prog?.liked ?? false,
+      position_seconds: prog?.position_seconds ?? 0,
       folder_name: folders?.name ?? null,
       has_lesson: (lessons?.length ?? 0) > 0 ? 1 : 0,
-    }));
+      };
+    });
 
     return NextResponse.json({ podcasts });
   } catch (error) {

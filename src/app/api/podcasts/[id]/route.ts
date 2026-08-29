@@ -27,7 +27,7 @@ export async function GET(
       );
     }
 
-    const [transcript, { data: lesson }, { data: explanations }] =
+    const [transcript, { data: lesson }, { data: explanations }, { data: progress }] =
       await Promise.all([
         fetchAllRows<TranscriptSegment>((from, to) =>
           supabase
@@ -49,13 +49,19 @@ export async function GET(
           .select('*')
           .eq('episode_id', podcastId)
           .order('start_time'),
+        supabase
+          .from('user_episodes')
+          .select('position_seconds, liked, listened')
+          .eq('episode_id', podcastId)
+          .maybeSingle(),
       ]);
 
     return NextResponse.json({
-      podcast,
+      podcast: { ...podcast, listened: progress?.listened ?? false },
       transcript,
       lesson,
-      explanations: explanations || []
+      explanations: explanations || [],
+      progress: progress || { position_seconds: 0, liked: false, listened: false }
     });
 
   } catch (error) {

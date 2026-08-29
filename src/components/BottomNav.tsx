@@ -76,6 +76,13 @@ export default function BottomNav({ onUploadClick }: BottomNavProps) {
             onClick={e => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-white/25 rounded-full mx-auto mb-3" />
+            <Link
+              href="/leaderboard"
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-white bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <span className="text-lg">🏆</span>
+              <span className="font-medium">Leaderboard</span>
+            </Link>
             {onUploadClick && (
               <button
                 onClick={() => { setMoreOpen(false); onUploadClick(); }}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { offlineStorage } from '@/lib/offline-storage';
 import { offlineCleanup } from '@/lib/offline-cleanup';
 
@@ -43,6 +43,14 @@ export default function AudioPlayer({
   const [showTranslation, setShowTranslation] = useState(false);
   const [translation, setTranslation] = useState('');
   const [isSeeking, setIsSeeking] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubTime, setScrubTime] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const savedPositionRef = useRef<number | null>(null);
+  const lastSavedRef = useRef(0);
+  const listenedSinceSaveRef = useRef(0);
+  const markedListenedRef = useRef(false);
 
   // Offline storage states
   const [isDownloaded, setIsDownloaded] = useState(false);
@@ -84,6 +92,20 @@ export default function AudioPlayer({
     checkOfflineStatus();
   }, [podcastId, audioSrc]);
 
+  const saveProgress = useCallback(async (time: number, extra: Record<string, unknown> = {}) => {
+    try {
+      const listenedDelta = Math.round(listenedSinceSaveRef.current);
+      listenedSinceSaveRef.current = 0;
+      await fetch(`/api/podcasts/${podcastId}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position_seconds: Math.floor(time), listened_delta: listenedDelta, ...extra }),
+      });
+    } catch (e) {
+      console.error('Failed to save progress:', e);
+    }
+  }, [podcastId]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -95,13 +117,36 @@ export default function AudioPlayer({
       if (!isSeeking) {
         setCurrentTime(time);
         onTimeUpdate(time);
-      } else {
-        console.log('Blocked timeupdate because isSeeking is true');
+      }
+
+      // Accumulate real listening time and checkpoint every 15s
+      if (!audio.paused) {
+        const delta = time - lastSavedRef.current;
+        if (delta > 0 && delta < 5) listenedSinceSaveRef.current += delta;
+        if (Math.abs(time - lastSavedRef.current) >= 15) {
+          lastSavedRef.current = time;
+          saveProgress(time);
+        } else if (delta < 0 || delta >= 5) {
+          lastSavedRef.current = time; // seeked; re-baseline without counting it
+        }
+      }
+
+      // Finishing 90% counts as listened
+      if (!markedListenedRef.current && audio.duration && time > audio.duration * 0.9) {
+        markedListenedRef.current = true;
+        saveProgress(time, { listened: true });
       }
     };
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
+      const pos = savedPositionRef.current;
+      if (pos && pos > 10 && pos < audio.duration - 15) {
+        audio.currentTime = pos;
+        setCurrentTime(pos);
+        lastSavedRef.current = pos;
+        savedPositionRef.current = null;
+      }
     };
 
     const handleEnded = () => {
@@ -117,7 +162,70 @@ export default function AudioPlayer({
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [onTimeUpdate, isSeeking]);
+  }, [onTimeUpdate, isSeeking, saveProgress]);
+
+  // Load saved position and liked state for this episode
+  useEffect(() => {
+    let cancelled = false;
+    markedListenedRef.current = false;
+    savedPositionRef.current = null;
+    (async () => {
+      try {
+        const res = await fetch(`/api/podcasts/${podcastId}`);
+        const data = await res.json();
+        if (cancelled) return;
+        setLiked(!!data.progress?.liked);
+        const pos = Number(data.progress?.position_seconds || 0);
+        // Ignore a position at the very end — that's a finished episode, not a bookmark.
+        if (pos > 10) {
+          savedPositionRef.current = pos;
+          const audio = audioRef.current;
+          if (audio && audio.readyState >= 1 && audio.duration && pos < audio.duration - 15) {
+            audio.currentTime = pos;
+            setCurrentTime(pos);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load playback progress:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [podcastId]);
+
+
+
+  // Save on the way out so a closed tab doesn't lose the position
+  useEffect(() => {
+    const flush = () => {
+      const audio = audioRef.current;
+      if (audio && audio.currentTime > 5) {
+        navigator.sendBeacon?.(
+          `/api/podcasts/${podcastId}/progress`,
+          new Blob([JSON.stringify({ position_seconds: Math.floor(audio.currentTime) })], { type: 'application/json' })
+        );
+      }
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, [podcastId]);
+
+  const toggleLike = async () => {
+    const next = !liked;
+    setLiked(next);
+    try {
+      await fetch(`/api/podcasts/${podcastId}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liked: next }),
+      });
+    } catch (e) {
+      console.error('Failed to save like:', e);
+      setLiked(!next);
+    }
+  };
 
   // Update playback speed when it changes
   useEffect(() => {
@@ -290,42 +398,48 @@ export default function AudioPlayer({
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const progressPercent = duration
+    ? Math.min(100, Math.max(0, ((scrubbing ? scrubTime : currentTime) / duration) * 100))
+    : 0;
+
+  const seekTo = (time: number) => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !duration) return;
+    const clamped = Math.min(Math.max(0, time), duration);
+    setCurrentTime(clamped);
+    lastSavedRef.current = clamped;
+    audio.currentTime = clamped;
+    onTimeUpdate(clamped);
+    saveProgress(clamped);
+  };
 
-    const newTime = parseFloat(e.target.value);
-    console.log('🎯 handleSeek called:', { newTime, duration });
+  const timeFromPointer = (clientX: number) => {
+    const el = trackRef.current;
+    if (!el || !duration) return 0;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  };
 
-    // Basic validation - only check if within duration
-    if (newTime < 0 || newTime > duration) {
-      console.log('🚫 Seek position outside valid range:', newTime);
-      return;
-    }
+  // Preview while dragging, commit on release — seeking on every move makes
+  // mobile playback stutter and fights the browser's buffering.
+  const handleScrubStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!duration) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setScrubbing(true);
+    setScrubTime(timeFromPointer(e.clientX));
+  };
 
-    setCurrentTime(newTime);
+  const handleScrubMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbing) return;
+    setScrubTime(timeFromPointer(e.clientX));
+  };
 
-    // Use seeked event to know when seeking is complete
-    const handleSeeked = () => {
-      console.log('🎯 seeked event fired:', { finalTime: audio.currentTime });
-      setIsSeeking(false);
-      audio.removeEventListener('seeked', handleSeeked);
-    };
-
-    const handleSeeking = () => {
-      console.log('🎯 seeking event fired');
-    };
-
-    console.log('🎯 Setting isSeeking to true');
-    setIsSeeking(true);
-    audio.addEventListener('seeked', handleSeeked);
-    audio.addEventListener('seeking', handleSeeking);
-
-    // Set the new time directly - no buffering checks
-    audio.currentTime = newTime;
-    console.log('🎯 Set audio.currentTime to:', newTime, 'actual value:', audio.currentTime);
-
-    onTimeUpdate(newTime);
+  const handleScrubEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbing) return;
+    const target = timeFromPointer(e.clientX);
+    setScrubbing(false);
+    seekTo(target);
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -465,6 +579,20 @@ export default function AudioPlayer({
                 </button>
               )}
               <button
+                onClick={toggleLike}
+                title={liked ? 'Remove from liked' : 'Like this episode'}
+                aria-pressed={liked}
+                className={`p-2 rounded-full transition-all ${
+                  liked ? 'bg-pink-500/25 text-pink-300' : 'bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                <svg className="w-5 h-5" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </button>
+
+              <button
                 onClick={() => offlineCleanup.markEpisodeAsListened(podcastId)}
                 className="px-3 py-1 text-xs bg-green-400/20 text-green-300 rounded hover:bg-green-400/30 transition-all"
                 title="Mark as listened (auto-removes download after 24h)"
@@ -572,31 +700,45 @@ export default function AudioPlayer({
 
       {/* Player Controls */}
       <div className="space-y-4">
-        {/* Progress Bar */}
+        {/* Progress Bar — pointer-driven so it drags properly on touch.
+            The hit area is padded well beyond the visible track. */}
         <div className="flex items-center space-x-3">
-          <span className="text-sm text-gray-300 min-w-[40px]">
-            {formatTime(currentTime)}
+          <span className="text-sm text-gray-300 min-w-[44px] tabular-nums">
+            {formatTime(scrubbing ? scrubTime : currentTime)}
           </span>
           <div
-            className="progress-slider flex-1 h-2 rounded-lg bg-black/40"
-            style={{
-              '--progress-width': `${duration ? (currentTime / duration) * 100 : 0}%`
-            } as React.CSSProperties & { '--progress-width': string }}
+            ref={trackRef}
+            onPointerDown={handleScrubStart}
+            onPointerMove={handleScrubMove}
+            onPointerUp={handleScrubEnd}
+            onPointerCancel={handleScrubEnd}
+            className="relative flex-1 py-4 -my-4 cursor-pointer touch-none select-none"
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={Math.floor(duration) || 0}
+            aria-valuenow={Math.floor(scrubbing ? scrubTime : currentTime)}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+              e.preventDefault();
+              seekTo((scrubbing ? scrubTime : currentTime) + (e.key === 'ArrowRight' ? 5 : -5));
+            }}
           >
+            <div className={`relative w-full rounded-full bg-white/15 overflow-hidden transition-all ${scrubbing ? 'h-3' : 'h-2'}`}>
+              <div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
             <div
-              className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg transition-all duration-75"
-              style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
-            ></div>
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              value={currentTime}
-              onChange={handleSeek}
-              className="relative z-10 w-full h-full appearance-none cursor-pointer slider bg-transparent"
+              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white shadow-lg transition-all ${
+                scrubbing ? 'w-6 h-6 ring-4 ring-purple-400/40' : 'w-4 h-4'
+              }`}
+              style={{ left: `${progressPercent}%` }}
             />
           </div>
-          <span className="text-sm text-gray-300 min-w-[40px]">
+          <span className="text-sm text-gray-300 min-w-[44px] tabular-nums">
             {formatTime(duration)}
           </span>
         </div>

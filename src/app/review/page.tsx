@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Navigation from '@/components/Navigation';
+import StreakBar from '@/components/StreakBar';
 import GlassCard from '@/components/GlassCard';
 import CosmicBackground from '@/components/CosmicBackground';
 import { levelInfo } from '@/lib/levels';
@@ -92,6 +93,7 @@ export default function ReviewPage() {
       <div className="relative z-10">
         <Navigation />
         <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <StreakBar />
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
               Vocab Review

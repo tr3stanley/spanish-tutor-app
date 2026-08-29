@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import StreakBar from '@/components/StreakBar';
 import Navigation from '@/components/Navigation';
 import FolderPodcastList from '@/components/FolderPodcastList';
 import UploadModal from '@/components/UploadModal';
@@ -22,9 +24,22 @@ interface Podcast {
   folder_id?: number;
   folder_name?: string;
   listened?: boolean;
+  liked?: boolean;
+  position_seconds?: number;
+  duration?: number;
   cefr_level?: string;
   dialect?: string;
   topic?: string;
+}
+
+interface SearchHit {
+  episode_id: number;
+  episode_title: string;
+  cefr_level: string | null;
+  folder_name: string | null;
+  hits: number;
+  first_start: number;
+  snippet: string;
 }
 
 const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -37,6 +52,10 @@ export default function Home() {
   const [levelFilter, setLevelFilter] = useState('all');
   const [dialectFilter, setDialectFilter] = useState('all');
   const [showLevelHelp, setShowLevelHelp] = useState(false);
+  const [likedOnly, setLikedOnly] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<SearchHit[] | null>(null);
 
   const fetchPodcasts = async () => {
     try {
@@ -67,7 +86,31 @@ export default function Home() {
   const availableLevels = CEFR_ORDER.filter(l => levelCounts.has(l));
   const availableDialects = [...new Set(podcasts.map(p => p.dialect).filter((d): d is string => !!d))].sort();
 
+  const runSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const q = query.trim();
+    if (q.length < 2) { setResults(null); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const d = await res.json();
+      setResults(d.results || []);
+    } catch (err) {
+      console.error(err);
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Started but not finished — the row that makes a 40-minute episode survivable.
+  const continueListening = podcasts
+    .filter(p => (p.position_seconds ?? 0) > 30 && !p.listened)
+    .sort((a, b) => (b.position_seconds ?? 0) - (a.position_seconds ?? 0))
+    .slice(0, 4);
+
   const filteredPodcasts = podcasts.filter(p =>
+    (!likedOnly || p.liked) &&
     (levelFilter === 'all' || p.cefr_level === levelFilter) &&
     (dialectFilter === 'all' || p.dialect === dialectFilter)
   );
@@ -86,11 +129,13 @@ export default function Home() {
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero Section */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-4xl font-bold text-white mb-4 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
             Podcast Tutor
           </h1>
         </div>
+
+        <StreakBar />
 
         {/* Statistics Cards */}
         {totalPodcasts > 0 && (
@@ -184,7 +229,19 @@ export default function Home() {
                 </div>
               )}
             </div>
-            {(levelFilter !== 'all' || dialectFilter !== 'all') && (
+            <div className="mt-3">
+              <button
+                onClick={() => setLikedOnly(v => !v)}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  likedOnly
+                    ? 'bg-pink-500/25 text-pink-200 border border-pink-400/40'
+                    : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                }`}
+              >
+                {likedOnly ? '♥ Liked only' : '♡ Liked'}
+              </button>
+            </div>
+            {(levelFilter !== 'all' || dialectFilter !== 'all' || likedOnly) && (
               <div className="mt-2 text-sm text-gray-300">
                 Showing {filteredPodcasts.length} of {totalPodcasts} episodes
               </div>
@@ -205,6 +262,75 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          <div className="px-6 pb-2">
+            <form onSubmit={runSearch} className="flex gap-2">
+              <input
+                value={query}
+                onChange={e => { setQuery(e.target.value); if (!e.target.value.trim()) setResults(null); }}
+                placeholder="Search every transcript — a word, a phrase…"
+                className="flex-1 bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400 text-sm focus:ring-2 focus:ring-purple-400 focus:outline-none"
+              />
+              <button type="submit" disabled={searching || query.trim().length < 2}
+                className="cosmic-button px-4 py-2 rounded-lg text-sm disabled:opacity-50">
+                {searching ? '…' : 'Search'}
+              </button>
+              {results && (
+                <button type="button" onClick={() => { setResults(null); setQuery(''); }}
+                  className="px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200">
+                  Clear
+                </button>
+              )}
+            </form>
+          </div>
+
+          {results && (
+            <div className="px-6 pb-4">
+              <p className="text-sm text-gray-300 mb-2">
+                {results.length === 0 ? 'No episodes contain that.' : `Found in ${results.length} episode${results.length === 1 ? '' : 's'}`}
+              </p>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {results.map(r => (
+                  <Link key={r.episode_id} href={`/podcast/${r.episode_id}?t=${Math.floor(r.first_start)}`}
+                    className="block p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-white text-sm font-medium">{r.episode_title}</span>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {r.cefr_level && `${r.cefr_level} · `}{r.hits} hit{r.hits === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 mt-1 search-snippet"
+                      dangerouslySetInnerHTML={{ __html: r.snippet }} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!results && continueListening.length > 0 && (
+            <div className="px-6 pb-4">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Continue listening</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {continueListening.map(p => {
+                  const pct = p.duration ? Math.min(100, ((p.position_seconds ?? 0) / p.duration) * 100) : 0;
+                  return (
+                    <Link key={p.id} href={`/podcast/${p.id}`}
+                      className="block p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                      <div className="text-sm text-white truncate">{p.title}</div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full bg-purple-400 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                          {Math.floor((p.position_seconds ?? 0) / 60)}m in
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="p-6">
             {loading ? (

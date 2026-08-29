@@ -272,3 +272,9 @@ body {
   background: #131a2e;
   border-top: 1px solid rgba(255, 255, 255, 0.10);
 }
+
+/* Search result highlighting (ts_headline emits <b> around matches) */
+.search-snippet b {
+  color: #d8b4fe;
+  font-weight: 600;
+}

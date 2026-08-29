@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
+    await supabase.rpc('bump_activity', { p_reviews: 1 });
+
     return NextResponse.json({ word: row });
   } catch (error) {
     console.error('Grade error:', error);
