@@ -140,14 +140,47 @@ export default function TutorPage() {
   const autoPlayedRef = useRef<Set<string>>(new Set());
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const chatCardRef = useRef<HTMLDivElement>(null);
+  const [chatHeight, setChatHeight] = useState<number | null>(null);
 
   useEffect(() => {
     if (tab === 'chat') messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, busy, tab]);
+  }, [messages, busy, tab, chatHeight]);
 
   useEffect(() => {
     try { setAutoPlay(localStorage.getItem('tutor-autoplay') === '1'); } catch { /* no storage */ }
   }, []);
+
+  // iOS shrinks the VISUAL viewport when the keyboard opens but leaves the layout
+  // viewport alone, so a normally-flowed composer ends up stranded behind the
+  // keyboard. Sizing the panel from its own top to the visual viewport's bottom
+  // keeps the input pinned just above the keyboard, like a messaging app.
+  useEffect(() => {
+    const compute = () => {
+      const el = chatCardRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const vv = window.visualViewport;
+      const vh = vv?.height ?? window.innerHeight;
+      // With the keyboard up the tab bar hides itself, so only reserve room for
+      // it when it's actually on screen.
+      const hidden = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+      const tabBar = window.innerWidth < 768 && hidden <= 120 ? 68 : 0;
+      setChatHeight(Math.max(280, Math.round(vh - top - tabBar - 8)));
+    };
+    compute();
+    const vv = window.visualViewport;
+    window.addEventListener('resize', compute);
+    window.addEventListener('orientationchange', compute);
+    vv?.addEventListener('resize', compute);
+    vv?.addEventListener('scroll', compute);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('orientationchange', compute);
+      vv?.removeEventListener('resize', compute);
+      vv?.removeEventListener('scroll', compute);
+    };
+  }, [tab, placementMode, profileLoaded, showSyllabus]);
 
   const toggleAutoPlay = () => {
     setAutoPlay(prev => {
@@ -782,8 +815,12 @@ export default function TutorPage() {
               )}
             </GlassCard>
           ) : (
-            <GlassCard className="flex flex-col">
-              <div className="p-4 space-y-4 overflow-y-auto" style={{ minHeight: '50vh', maxHeight: '65vh' }}>
+            <GlassCard
+              ref={chatCardRef}
+              className="flex flex-col overflow-hidden"
+              style={chatHeight ? { height: `${chatHeight}px` } : { minHeight: '50vh' }}
+            >
+              <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                 {messages.length === 0 && !busy && (
                   <p className="text-gray-400 text-center py-8">
                     Say hola, ask a question, or hit the unit button above to continue your course.
@@ -840,7 +877,7 @@ export default function TutorPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="p-4 border-t border-white/20">
+              <div className="shrink-0 p-4 border-t border-white/20">
                 {!placementMode && (
                   <div className="flex flex-wrap items-center gap-2 mb-3">
                     <button

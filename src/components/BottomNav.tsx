@@ -50,6 +50,7 @@ export default function BottomNav({ onUploadClick }: BottomNavProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
     getBrowserSupabase().auth.getSession().then(({ data }) => {
@@ -60,6 +61,22 @@ export default function BottomNav({ onUploadClick }: BottomNavProps) {
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardOpen(hidden > 120);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
 
   const signOut = async () => {
     await getBrowserSupabase().auth.signOut();
@@ -105,7 +122,7 @@ export default function BottomNav({ onUploadClick }: BottomNavProps) {
       )}
 
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 solid-nav"
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-50 solid-nav ${keyboardOpen ? 'hidden' : ''}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="flex items-stretch">

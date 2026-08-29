@@ -1,20 +1,24 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { CSSProperties, ReactNode, forwardRef } from 'react';
 
 interface GlassCardProps {
   children: ReactNode;
   className?: string;
   hover?: boolean;
+  style?: CSSProperties;
 }
 
-export default function GlassCard({
-  children,
-  className = '',
-  hover = true
-}: GlassCardProps) {
+// forwardRef so callers can measure it — the tutor chat sizes itself against
+// the visual viewport to keep its composer above the on-screen keyboard.
+const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(function GlassCard(
+  { children, className = '', hover = true, style },
+  ref
+) {
   return (
     <div
+      ref={ref}
+      style={style}
       className={`
         glass-card
         ${hover ? 'hover:glass-card-hover' : ''}
@@ -24,4 +28,6 @@ export default function GlassCard({
       {children}
     </div>
   );
-}
+});
+
+export default GlassCard;
