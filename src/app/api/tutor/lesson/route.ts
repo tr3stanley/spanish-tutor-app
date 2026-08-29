@@ -70,7 +70,7 @@ Build the lesson in this EXACT shape (it's optimized for getting conversational 
 Return ONLY JSON: {"topic": "<short lesson name>", "lesson": "<the full lesson as plain text with the 4 sections>"}`,
         },
       ],
-      { json: true, maxTokens: 2500 }
+      { json: true, maxTokens: 2500, log: { supabase, feature: 'lesson' } }
     );
 
     const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());

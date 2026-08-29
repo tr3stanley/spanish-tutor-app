@@ -23,6 +23,11 @@ function countSpanishAnswers(history: PlacementTurn[]): number {
 // placement is ephemeral — only the final assessment is persisted (to user_profile).
 export async function POST(request: NextRequest) {
   try {
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+    const { supabase } = auth;
+    const logCtx = { supabase, feature: 'placement' };
+
     const { history } = await request.json() as { history: PlacementTurn[] };
 
     // The interviewer's private notes ride along in the history so it keeps its
@@ -43,7 +48,7 @@ export async function POST(request: NextRequest) {
       messages.push({ role: 'user', content: "(The student has just opened the placement interview. Greet them and ask your first question.)" });
     }
 
-    const reply = await callOpenRouterChat(messages, { temperature: 0.4, json: true });
+    const reply = await callOpenRouterChat(messages, { temperature: 0.4, json: true, log: logCtx });
 
     let parsed: Record<string, unknown>;
     try {
@@ -65,7 +70,7 @@ export async function POST(request: NextRequest) {
           { role: 'assistant', content: reply },
           { role: 'user', content: `(System: the student has only produced ${taskCount} Spanish answers; the minimum before you may finish is ${MIN_TASKS}. Do NOT finish yet — ask the next task at the appropriate rung, climbing if they are handling it. Reply with the normal in-progress JSON.)` },
         ],
-        { temperature: 0.4, json: true }
+        { temperature: 0.4, json: true, log: logCtx }
       );
       try {
         const cont = JSON.parse(nudge.replace(/^```(json)?|```$/g, '').trim());
@@ -78,9 +83,6 @@ export async function POST(request: NextRequest) {
     if (parsed.done === true) {
       try {
         const assessment = parsed as Record<string, any>;
-        const auth = await getAuth(request);
-        if (!auth) return unauthorized();
-        const { supabase } = auth;
         const { error } = await supabase.from('user_profile').upsert({
           user_id: auth.userId,
           cefr_level: assessment.cefr,

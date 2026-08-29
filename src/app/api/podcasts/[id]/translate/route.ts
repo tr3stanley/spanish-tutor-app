@@ -39,7 +39,7 @@ export async function POST(
         content: `You are a professional translator. Translate the following ${sourceLanguage} text to ${targetLanguage}. Provide only the translation, no explanations or additional text.`
       },
       { role: 'user', content: text }
-    ], { temperature: 0.3, maxTokens: 500, role: 'bulk' });
+    ], { temperature: 0.3, maxTokens: 500, role: 'bulk', log: { supabase, feature: 'translate' } });
 
     if (!translation) {
       throw new Error('No translation received from AI');

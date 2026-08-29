@@ -6,7 +6,7 @@ import { generateLessonPlan, callOpenRouterChat } from '@/lib/ai';
 // CEFR level + topic + dialect, same contract as scripts/classify-supabase.mjs.
 // Without this an uploaded episode has no level, so it misses the library's
 // level filters and the tutor can't reason about its difficulty.
-async function classifyEpisode(title: string, transcript: string) {
+async function classifyEpisode(supabase: SupabaseClient, title: string, transcript: string) {
   try {
     const raw = await callOpenRouterChat(
       [
@@ -23,7 +23,7 @@ Return ONLY a JSON object, no markdown, no explanation:
 {"cefr": "<A1|A2|B1|B2|C1|C2 - difficulty for a Spanish LEARNER>", "topic": "<2-4 word English topic label>", "dialect": "<mexican|castilian|rioplatense|caribbean|andean|central_american|neutral_latam|mixed|unknown>"}`,
         },
       ],
-      { json: true, temperature: 0.1, maxTokens: 400, role: 'bulk' }
+      { json: true, temperature: 0.1, maxTokens: 400, role: 'bulk', log: { supabase, feature: 'classify' } }
     );
     const p = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
     return {
@@ -93,7 +93,7 @@ export async function processEpisode(
       generateLessonPlan(fullTranscript, language),
       // Spanish-only: the classifier's levels and dialects don't apply to Russian.
       language === 'spanish' && !episode?.cefr_level
-        ? classifyEpisode(episode?.title || '', fullTranscript)
+        ? classifyEpisode(supabase, episode?.title || '', fullTranscript)
         : Promise.resolve(null),
     ]);
 

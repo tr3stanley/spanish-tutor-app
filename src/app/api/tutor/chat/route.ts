@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       { role: 'system', content: tutorSystemPrompt(context) },
       ...history,
       { role: 'user', content: message.trim() },
-    ]);
+    ], { log: { supabase, feature: 'tutor_chat' } });
 
     const { error } = await supabase.from('tutor_messages').insert([
       { role: 'user', content: message.trim() },
@@ -90,7 +90,7 @@ List ONLY genuine Spanish grammar/vocabulary errors in the STUDENT'S message (ma
 Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correction": "<corrected version>", "note": "<3-6 word label, e.g. 'preterite of ir'>", "category": "<one of: verb conjugation|gender/number agreement|ser vs estar|preterite vs imperfect|subjunctive|prepositions|word choice|word order|other>"}]}`,
         },
       ],
-      { json: true, temperature: 0, maxTokens: 900 }
+      { json: true, temperature: 0, maxTokens: 900, log: { supabase, feature: 'error_extraction' } }
     );
     const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
     const rows = (parsed.errors || [])

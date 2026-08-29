@@ -46,7 +46,7 @@ ${song.lyrics.slice(0, 6000)}
 Return ONLY JSON: {"items": [{"word": "<as it appears>", "lemma": "<dictionary form, lowercase>", "translation": "<English, with region tag if slang>", "part_of_speech": "<noun|verb|adjective|adverb|expression|...>", "example": "<the lyric line it appears in, or a short natural sentence>", "example_translation": "<English>"}]}`,
         },
       ],
-      { json: true, temperature: 0.2, maxTokens: 2000, role: 'bulk' }
+      { json: true, temperature: 0.2, maxTokens: 2000, role: 'bulk', log: { supabase, feature: 'song_vocab' } }
     );
 
     const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());

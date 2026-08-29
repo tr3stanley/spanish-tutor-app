@@ -49,7 +49,7 @@ Rules:
 - 2-4 "culture" notes.`,
         },
       ],
-      { json: true, temperature: 0.3, maxTokens: 8000 }
+      { json: true, temperature: 0.3, maxTokens: 8000, log: { supabase, feature: 'song_study_sheet' } }
     );
 
     const sheet = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());

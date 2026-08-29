@@ -46,7 +46,7 @@ Write a focused explainer (plain text, no markdown headers) that:
 Keep it under 350 words and encouraging.`,
         },
       ],
-      { temperature: 0.3, maxTokens: 1200 }
+      { temperature: 0.3, maxTokens: 1200, log: { supabase, feature: 'mistake_explainer' } }
     );
 
     const { data: saved, error } = await supabase

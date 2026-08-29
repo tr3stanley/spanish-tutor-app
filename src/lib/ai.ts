@@ -1,9 +1,67 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+
 interface OpenRouterResponse {
   choices: Array<{
     message: {
       content: string;
     };
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+}
+
+// List price per million tokens [input, output]. Used to attribute spend per
+// feature; Groq's free tier means actual spend can be lower, which is why the
+// provider is recorded alongside.
+const PRICES: Record<string, [number, number]> = {
+  'openai/gpt-oss-120b': [0.037, 0.170],
+  'openai/gpt-oss-20b': [0.030, 0.130],
+  'google/gemini-2.5-flash-lite': [0.100, 0.400],
+  'deepseek/deepseek-chat': [0.257, 1.029],
+  'deepseek/deepseek-v4-flash': [0.085, 0.171],
+  'moonshotai/kimi-k2-0905': [0.600, 2.500],
+  'anthropic/claude-haiku-4.5': [1.000, 5.000],
+  'mistralai/mistral-small-2603': [0.150, 0.600],
+  'qwen/qwen3.8-27b': [0.425, 2.550],
+};
+
+// Where to attribute this call. Optional — logging never blocks or breaks a request.
+export interface UsageContext {
+  supabase: SupabaseClient;
+  feature: string;
+}
+
+function estimateCost(model: string, inTok: number, outTok: number): number | null {
+  const p = PRICES[model];
+  if (!p) return null;
+  return (inTok * p[0] + outTok * p[1]) / 1_000_000;
+}
+
+async function logUsage(
+  ctx: UsageContext | undefined,
+  model: string,
+  provider: string,
+  role: string,
+  usage: { prompt_tokens?: number; completion_tokens?: number } | undefined
+) {
+  if (!ctx) return;
+  try {
+    const inTok = usage?.prompt_tokens ?? 0;
+    const outTok = usage?.completion_tokens ?? 0;
+    await ctx.supabase.from('llm_usage').insert({
+      feature: ctx.feature,
+      role,
+      model,
+      provider,
+      prompt_tokens: inTok,
+      completion_tokens: outTok,
+      cost_usd: estimateCost(model, inTok, outTok),
+    });
+  } catch (e) {
+    console.error('Usage logging failed (non-fatal):', e);
+  }
 }
 
 export interface ChatMessage {
@@ -75,6 +133,7 @@ export async function callOpenRouterChat(
     temperature?: number;
     maxTokens?: number;
     json?: boolean;
+    log?: UsageContext;
   } = {}
 ): Promise<string> {
   const model = options.model || ROLE_MODELS[options.role || 'chat'];
@@ -98,7 +157,10 @@ export async function callOpenRouterChat(
       if (res.ok) {
         const data: OpenRouterResponse = await res.json();
         const text = data.choices[0]?.message?.content || '';
-        if (text) return text;
+        if (text) {
+          await logUsage(options.log, model, 'groq', options.role || 'chat', data.usage);
+          return text;
+        }
       }
       console.log(`Groq unavailable for ${model} (${res.status}); using OpenRouter`);
     } catch (e) {
@@ -115,6 +177,7 @@ export async function callOpenRouterChat(
     throw new Error(`Model API error (${model}): ${response.status} ${response.statusText}`);
   }
   const data: OpenRouterResponse = await response.json();
+  await logUsage(options.log, model, 'openrouter', options.role || 'chat', data.usage);
   return data.choices[0]?.message?.content || '';
 }
 
