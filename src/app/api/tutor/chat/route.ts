@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         .from('tutor_messages')
         .select('role, content')
         .order('id', { ascending: false })
-        .limit(20),
+        .limit(10),
     ]);
 
     const history = (historyRes.data || []).reverse() as ChatMessage[];
@@ -90,7 +90,7 @@ List ONLY genuine Spanish grammar/vocabulary errors in the STUDENT'S message (ma
 Return ONLY JSON: {"errors": [{"error": "<exact quote from student>", "correction": "<corrected version>", "note": "<3-6 word label, e.g. 'preterite of ir'>", "category": "<one of: verb conjugation|gender/number agreement|ser vs estar|preterite vs imperfect|subjunctive|prepositions|word choice|word order|other>"}]}`,
         },
       ],
-      { json: true, temperature: 0, maxTokens: 300 }
+      { json: true, temperature: 0, maxTokens: 900 }
     );
     const parsed = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
     const rows = (parsed.errors || [])

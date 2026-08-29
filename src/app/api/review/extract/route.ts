@@ -58,7 +58,7 @@ ${transcript}
 Return ONLY JSON: {"items": [{"word": "<as it appears>", "lemma": "<dictionary form, lowercase>", "translation": "<English>", "part_of_speech": "<noun|verb|adjective|adverb|expression|...>", "example": "<short sentence from or based on the transcript>", "example_translation": "<English>"}]}`,
           },
         ],
-        { json: true, temperature: 0.2, maxTokens: 2000 }
+        { json: true, temperature: 0.2, maxTokens: 2000, role: 'bulk' }
       );
 
       try {

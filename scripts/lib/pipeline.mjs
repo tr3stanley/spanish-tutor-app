@@ -78,19 +78,48 @@ export async function getOrCreateFolder(supabase, name, cache) {
   return data.id;
 }
 
-export async function callOpenRouter(prompt, { maxTokens = 4000, temperature = 0.3, json = false } = {}) {
+// Same routing as the app (src/lib/ai.ts): gpt-oss-120b for language work,
+// flash-lite for short structured calls. Groq is tried first for speed and
+// falls back to OpenRouter when it rate-limits.
+const ROLE_MODELS = {
+  chat: process.env.MODEL_CHAT || get('MODEL_CHAT') || 'openai/gpt-oss-120b',
+  bulk: process.env.MODEL_BULK || get('MODEL_BULK') || 'google/gemini-2.5-flash-lite',
+};
+const GROQ_MODELS = new Set(['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b']);
+
+export async function callOpenRouter(prompt, { maxTokens = 4000, temperature = 0.3, json = false, role = 'chat' } = {}) {
+  const model = ROLE_MODELS[role] || ROLE_MODELS.chat;
+  // gpt-oss-120b truncates JSON under tight budgets; give it room.
+  const cap = json ? Math.max(maxTokens, 900) : maxTokens;
+  const body = JSON.stringify({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    temperature,
+    max_tokens: cap,
+    ...(json ? { response_format: { type: 'json_object' } } : {}),
+  });
+
+  const groqKey = get('GROQ_API_KEY');
+  if (groqKey && GROQ_MODELS.has(model)) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+        body,
+      });
+      if (res.ok) {
+        const text = (await res.json()).choices?.[0]?.message?.content || '';
+        if (text) return text;
+      }
+    } catch { /* fall through to OpenRouter */ }
+  }
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${get('OPENROUTER_API_KEY')}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'deepseek/deepseek-chat',
-          messages: [{ role: 'user', content: prompt }],
-          temperature,
-          max_tokens: maxTokens,
-          ...(json ? { response_format: { type: 'json_object' } } : {}),
-        }),
+        body,
       });
       if (!res.ok) throw new Error(`OpenRouter ${res.status}`);
       return (await res.json()).choices?.[0]?.message?.content || '';
@@ -134,7 +163,7 @@ ${transcript.slice(0, 6000)}
 
 Return ONLY a JSON object, no markdown, no explanation:
 {"cefr": "<A1|A2|B1|B2|C1|C2 - difficulty for a Spanish LEARNER>", "topic": "<2-4 word English topic label>", "dialect": "<mexican|castilian|rioplatense|caribbean|andean|central_american|neutral_latam|mixed|unknown>"}`,
-      { maxTokens: 100, temperature: 0.1, json: true });
+      { maxTokens: 400, temperature: 0.1, json: true, role: 'bulk' });
     const p = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
     return { cefr_level: p.cefr || null, topic: p.topic || null, dialect: p.dialect || null };
   } catch {

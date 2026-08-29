@@ -23,7 +23,7 @@ Return ONLY a JSON object, no markdown, no explanation:
 {"cefr": "<A1|A2|B1|B2|C1|C2 - difficulty for a Spanish LEARNER>", "topic": "<2-4 word English topic label>", "dialect": "<mexican|castilian|rioplatense|caribbean|andean|central_american|neutral_latam|mixed|unknown>"}`,
         },
       ],
-      { json: true, temperature: 0.1, maxTokens: 100 }
+      { json: true, temperature: 0.1, maxTokens: 400, role: 'bulk' }
     );
     const p = JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
     return {

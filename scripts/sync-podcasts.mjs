@@ -193,7 +193,7 @@ async function callOpenRouter(prompt, maxTokens = 4000) {
     method: 'POST',
     headers: { Authorization: `Bearer ${OPENROUTER_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'deepseek/deepseek-chat',
+      model: process.env.MODEL_CHAT || 'openai/gpt-oss-120b',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       max_tokens: maxTokens,

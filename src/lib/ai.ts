@@ -11,17 +11,47 @@ export interface ChatMessage {
   content: string;
 }
 
-// OpenRouter drops connections transiently (ETIMEDOUT); retry network errors and 5xx.
-async function postWithRetry(body: string, attempts = 3): Promise<Response> {
+// Model roles. Chosen by benchmarking 13 models on this app's own tasks
+// (five-turn lesson, error detection, dialect fidelity) — see PLAN.md.
+//
+// chat: gpt-oss-120b was the only model to score 5/5 on both correcting AND
+//   explaining errors, while holding Costa Rican usted forms and never flagging
+//   the accents students can't type. It is also among the cheapest and, on Groq,
+//   ~5x faster than what it replaces.
+// bulk: gpt-oss-120b is verbose in JSON mode and truncates under tight token
+//   budgets, so short structured calls use flash-lite instead. Note flash-lite
+//   invents errors on correct Spanish, so it must NOT be used for error
+//   extraction — that stays on the chat model.
+export type ModelRole = 'chat' | 'bulk';
+
+const ROLE_MODELS: Record<ModelRole, string> = {
+  chat: process.env.MODEL_CHAT || 'openai/gpt-oss-120b',
+  bulk: process.env.MODEL_BULK || 'google/gemini-2.5-flash-lite',
+};
+
+// Models Groq serves. Groq is far faster but rate-limited, so it is tried first
+// and we fall back to OpenRouter on any failure.
+const GROQ_MODELS = new Set([
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
+  'qwen/qwen3.6-27b',
+]);
+
+// gpt-oss-120b needs room to finish a JSON object; below this it truncates and
+// returns unparseable output.
+const MIN_JSON_TOKENS = 900;
+
+async function postJson(url: string, key: string, body: string, attempts = 3): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost:3000',
-          'X-Title': 'Spanish Tutor'
+          'HTTP-Referer': 'https://spanish-tutor-app.vercel.app',
+          'X-Title': 'Spanish Tutor',
         },
         body,
       });
@@ -41,32 +71,58 @@ export async function callOpenRouterChat(
   messages: ChatMessage[],
   options: {
     model?: string;
+    role?: ModelRole;
     temperature?: number;
     maxTokens?: number;
     json?: boolean;
   } = {}
 ): Promise<string> {
-  const response = await postWithRetry(JSON.stringify({
-    model: options.model || 'deepseek/deepseek-chat',
+  const model = options.model || ROLE_MODELS[options.role || 'chat'];
+  const maxTokens = options.json
+    ? Math.max(options.maxTokens ?? 2000, MIN_JSON_TOKENS)
+    : (options.maxTokens ?? 2000);
+
+  const payload = JSON.stringify({
+    model,
     messages,
     temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2000,
-    ...(options.json ? { response_format: { type: 'json_object' } } : {})
-  }));
+    max_tokens: maxTokens,
+    ...(options.json ? { response_format: { type: 'json_object' } } : {}),
+  });
 
-  if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${response.statusText}`);
+  const groqKey = process.env.GROQ_API_KEY;
+  // Groq first for latency; it rate-limits, so any failure falls through.
+  if (groqKey && GROQ_MODELS.has(model)) {
+    try {
+      const res = await postJson('https://api.groq.com/openai/v1/chat/completions', groqKey, payload, 1);
+      if (res.ok) {
+        const data: OpenRouterResponse = await res.json();
+        const text = data.choices[0]?.message?.content || '';
+        if (text) return text;
+      }
+      console.log(`Groq unavailable for ${model} (${res.status}); using OpenRouter`);
+    } catch (e) {
+      console.log('Groq request failed, using OpenRouter:', e);
+    }
   }
 
+  const response = await postJson(
+    'https://openrouter.ai/api/v1/chat/completions',
+    process.env.OPENROUTER_API_KEY || '',
+    payload
+  );
+  if (!response.ok) {
+    throw new Error(`Model API error (${model}): ${response.status} ${response.statusText}`);
+  }
   const data: OpenRouterResponse = await response.json();
   return data.choices[0]?.message?.content || '';
 }
 
 export async function callOpenRouter(
   prompt: string,
-  model: string = 'deepseek/deepseek-chat'
+  model?: string
 ): Promise<string> {
-  return callOpenRouterChat([{ role: 'user', content: prompt }], { model });
+  return callOpenRouterChat([{ role: 'user', content: prompt }], { model, role: 'chat' });
 }
 
 export async function generateLessonPlan(

@@ -56,10 +56,10 @@ Return ONLY a JSON object, no markdown, no explanation:
     method: 'POST',
     headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'deepseek/deepseek-chat',
+      model: process.env.MODEL_BULK || 'google/gemini-2.5-flash-lite',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
-      max_tokens: 100,
+      max_tokens: 400,
       response_format: { type: 'json_object' },
     }),
   });
