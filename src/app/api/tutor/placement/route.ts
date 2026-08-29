@@ -3,15 +3,39 @@ import { getAuth, unauthorized } from '@/lib/auth';
 import { callOpenRouterChat, ChatMessage } from '@/lib/ai';
 import { PLACEMENT_SYSTEM, generateSyllabus, normalizeCategory } from '@/lib/tutor';
 
+const MIN_TASKS = 7;
+
+interface PlacementTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  notes?: string;
+}
+
+// A student turn counts as a completed task once it actually contains Spanish —
+// their opening answers about goals are in English and shouldn't count.
+const SPANISH_HINT = /[áéíóúñ¿¡]|\b(el|la|los|las|un|una|es|son|está|estoy|que|de|en|por|para|con|mi|me|yo|muy|pero|porque|cuando|creo|tengo|fui|era|gusta|hay|más)\b/i;
+
+function countSpanishAnswers(history: PlacementTurn[]): number {
+  return history.filter(m => m.role === 'user' && SPANISH_HINT.test(m.content)).length;
+}
+
 // One placement interview turn. The client sends the whole interview so far;
 // placement is ephemeral — only the final assessment is persisted (to user_profile).
 export async function POST(request: NextRequest) {
   try {
-    const { history } = await request.json() as { history: ChatMessage[] };
+    const { history } = await request.json() as { history: PlacementTurn[] };
 
+    // The interviewer's private notes ride along in the history so it keeps its
+    // running assessment across turns — but they never reach the student's screen
+    // and never enter the saved transcript.
     const messages: ChatMessage[] = [
       { role: 'system', content: PLACEMENT_SYSTEM },
-      ...(history || []),
+      ...(history || []).map(m => ({
+        role: m.role,
+        content: m.role === 'assistant' && m.notes
+          ? `${m.content}\n\n[PRIVATE NOTES — not shown to the student: ${m.notes}]`
+          : m.content,
+      })),
     ];
 
     // First turn: have the interviewer open the conversation
@@ -19,13 +43,41 @@ export async function POST(request: NextRequest) {
       messages.push({ role: 'user', content: "(The student has just opened the placement interview. Greet them and ask your first question.)" });
     }
 
-    const reply = await callOpenRouterChat(messages, { temperature: 0.4 });
+    const reply = await callOpenRouterChat(messages, { temperature: 0.4, json: true });
 
-    // Detect the final assessment JSON
-    const jsonMatch = reply.match(/\{[\s\S]*"done"\s*:\s*true[\s\S]*\}/);
-    if (jsonMatch) {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(reply.replace(/^```(json)?|```$/g, '').trim()) || {};
+    } catch {
+      // Model broke the contract — fall back to showing the raw text so the
+      // interview can continue rather than dead-ending.
+      return NextResponse.json({ done: false, message: reply, notes: '', task: 0 });
+    }
+
+    // Guard the task floor in code, not just in the prompt. Don't trust the model's
+    // own counter — it under-counts, and omits the field entirely when finishing.
+    // Counting the student's Spanish answers is deterministic and can't drift.
+    const taskCount = countSpanishAnswers(history || []);
+    if (parsed.done === true && taskCount < MIN_TASKS) {
+      const nudge = await callOpenRouterChat(
+        [
+          ...messages,
+          { role: 'assistant', content: reply },
+          { role: 'user', content: `(System: the student has only produced ${taskCount} Spanish answers; the minimum before you may finish is ${MIN_TASKS}. Do NOT finish yet — ask the next task at the appropriate rung, climbing if they are handling it. Reply with the normal in-progress JSON.)` },
+        ],
+        { temperature: 0.4, json: true }
+      );
       try {
-        const assessment = JSON.parse(jsonMatch[0]);
+        const cont = JSON.parse(nudge.replace(/^```(json)?|```$/g, '').trim());
+        if (cont && cont.done !== true) parsed = cont;
+      } catch {
+        // keep the original assessment rather than losing the interview
+      }
+    }
+
+    if (parsed.done === true) {
+      try {
+        const assessment = parsed as Record<string, any>;
         const auth = await getAuth(request);
         if (!auth) return unauthorized();
         const { supabase } = auth;
@@ -43,9 +95,9 @@ export async function POST(request: NextRequest) {
         // can reference the student's actual errors later.
         const closing = assessment.closing_message || '';
         const transcriptRows = [
-          ...(history || []).map((m: ChatMessage) => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content,
+          ...(history || []).map((m: PlacementTurn) => ({
+            role: m.role,
+            content: m.content, // visible text only — notes stay out of the record
             kind: 'placement',
           })),
           ...(closing ? [{ role: 'assistant' as const, content: closing, kind: 'placement' }] : []),
@@ -57,9 +109,9 @@ export async function POST(request: NextRequest) {
         const gaps = Array.isArray(assessment.strengths?.gaps) ? assessment.strengths.gaps : [];
         const errorRows = gaps
           .filter((g: { evidence?: string }) => g && typeof g === 'object' && g.evidence)
-          .map((g: { issue?: string; evidence: string; why?: string; category?: string }) => ({
+          .map((g: { issue?: string; evidence: string; why?: string; category?: string; correction?: string }) => ({
             error: g.evidence,
-            correction: null,
+            correction: g.correction || null,
             note: [g.issue, g.why].filter(Boolean).join(': '),
             category: normalizeCategory(g.category),
             source: 'placement',
@@ -90,7 +142,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ done: false, message: reply });
+    return NextResponse.json({
+      done: false,
+      message: String(parsed.message || reply),
+      notes: String(parsed.notes || ''),
+      task: taskCount,
+    });
   } catch (error) {
     console.error('Placement error:', error);
     return NextResponse.json({ error: 'Placement interview failed' }, { status: 500 });

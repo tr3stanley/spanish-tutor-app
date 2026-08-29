@@ -13,6 +13,9 @@ interface Message {
   content: string;
   kind?: string;
   at?: string;
+  // Placement only: the interviewer's private assessment. Never rendered —
+  // students who see themselves being marked answer below their real level.
+  notes?: string;
 }
 
 interface Profile {
@@ -63,6 +66,22 @@ function renderRich(text: string): ReactNode {
   });
 }
 
+// Tutor replies mix English explanation with Spanish examples. Reading the English
+// aloud in a Spanish voice teaches nothing, so auto-play speaks only the Spanish:
+// quoted/emphasised fragments, or lines that look Spanish by their function words.
+function spanishOnly(text: string): string {
+  const clean = text.replace(/[*_`]/g, '');
+  const quoted = [...clean.matchAll(/[""«]([^""»]{3,})[""»]/g)].map(m => m[1].trim());
+  if (quoted.length > 0) return quoted.join('. ');
+
+  const spanishish = /\b(el|la|los|las|un|una|es|son|está|están|que|de|en|por|para|con|no|sí|y|pero|porque|me|te|se|mi|tu|su|qué|cómo|dónde|cuándo|muy|más|hola|gracias|puedo|puedes|tengo|tienes|vamos|quiero)\b/i;
+  const lines = clean
+    .split(/\n|(?<=[.!?¡¿])\s+/)
+    .map(l => l.trim())
+    .filter(l => l.length > 8 && spanishish.test(l) && !/^[A-Z][a-z]+ (is|are|means|the|to|for|when|you)\b/.test(l));
+  return lines.join(' ').slice(0, 600);
+}
+
 function dayLabel(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
@@ -111,16 +130,33 @@ export default function TutorPage() {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [autoPlay, setAutoPlay] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ttsCacheRef = useRef<Map<string, string>>(new Map());
+  const autoPlayedRef = useRef<Set<string>>(new Set());
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     if (tab === 'chat') messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, busy, tab]);
+
+  useEffect(() => {
+    try { setAutoPlay(localStorage.getItem('tutor-autoplay') === '1'); } catch { /* no storage */ }
+  }, []);
+
+  const toggleAutoPlay = () => {
+    setAutoPlay(prev => {
+      const next = !prev;
+      try { localStorage.setItem('tutor-autoplay', next ? '1' : '0'); } catch { /* no storage */ }
+      if (!next) stopSpeaking();
+      return next;
+    });
+  };
 
   const loadToday = useCallback(async () => {
     try {
@@ -204,7 +240,7 @@ export default function TutorPage() {
         body: JSON.stringify({ history: [] }),
       });
       const data = await res.json();
-      const opening = [{ id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, at: new Date().toISOString() }];
+      const opening = [{ id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, at: new Date().toISOString() }];
       setMessages(opening);
       savePlacement(opening);
     } catch (e) {
@@ -225,14 +261,14 @@ export default function TutorPage() {
 
     try {
       if (placementMode) {
-        const history = nextMessages.map(m => ({ role: m.role, content: m.content }));
+        const history = nextMessages.map(m => ({ role: m.role, content: m.content, notes: m.notes }));
         const res = await fetch('/api/tutor/placement', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ history }),
         });
         const data = await res.json();
-        const withReply = [...nextMessages, { id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, at: new Date().toISOString() }];
+        const withReply = [...nextMessages, { id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, at: new Date().toISOString() }];
         setMessages(withReply);
         if (data.done) {
           setPlacementMode(false);
@@ -350,12 +386,57 @@ export default function TutorPage() {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
+
+      // Auto-stop after a beat of silence, so it's talk-and-done rather than
+      // tap-talk-tap. Cheaper and simpler than a always-on mic, and it avoids
+      // transcribing an open room.
+      try {
+        const ctx = new AudioContext();
+        audioCtxRef.current = ctx;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        let spokeYet = false;
+
+        const tick = () => {
+          if (mr.state !== 'recording') return;
+          analyser.getByteTimeDomainData(buf);
+          let peak = 0;
+          for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+          const speaking = peak > 8; // ~3% deviation from silence
+
+          if (speaking) {
+            spokeYet = true;
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
+            }
+          } else if (spokeYet && !silenceTimerRef.current) {
+            silenceTimerRef.current = setTimeout(() => {
+              if (mr.state === 'recording') mr.stop();
+            }, 2000);
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      } catch {
+        // No AudioContext (or blocked) — the stop button still works.
+      }
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+        }
+        audioCtxRef.current?.close().catch(() => {});
+        audioCtxRef.current = null;
         setRecording(false);
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
         if (blob.size < 2000) return;
@@ -442,6 +523,36 @@ export default function TutorPage() {
       setSpeakingId(null);
     }
   };
+
+  // Auto-play deliberately uses the FREE browser voice, not Azure. Azure's tier is
+  // 500k chars/month for everyone combined — about 14 replies a day — so reading
+  // every message aloud through it would exhaust the quota in a fortnight. The
+  // 🔊 button still uses the good neural voice on demand.
+  const speakWithBrowserVoice = useCallback((id: string, text: string) => {
+    if (!window.speechSynthesis) return;
+    const spanish = spanishOnly(text);
+    if (!spanish) return; // nothing worth hearing — reply was pure English
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(spanish);
+    const esVoice = window.speechSynthesis.getVoices().find(v => /^es[-_]/i.test(v.lang));
+    if (esVoice) u.voice = esVoice;
+    u.lang = esVoice?.lang || 'es-ES';
+    u.rate = 0.9;
+    u.onend = () => setSpeakingId(cur => (cur === id ? null : cur));
+    u.onerror = () => setSpeakingId(cur => (cur === id ? null : cur));
+    setSpeakingId(id);
+    window.speechSynthesis.speak(u);
+  }, []);
+
+  useEffect(() => {
+    if (!autoPlay || placementMode || busy) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== 'assistant' || autoPlayedRef.current.has(last.id)) return;
+    autoPlayedRef.current.add(last.id);
+    // Browsers block audio without a prior gesture; sending a message counts,
+    // but iOS can still refuse, in which case this simply no-ops.
+    speakWithBrowserVoice(last.id, last.content);
+  }, [messages, autoPlay, placementMode, busy, speakWithBrowserVoice]);
 
   const hasProfile = !!profile?.cefr_level;
   const currentUnit = today?.syllabus?.current || null;
@@ -731,7 +842,21 @@ export default function TutorPage() {
 
               <div className="p-4 border-t border-white/20">
                 {!placementMode && (
-                  <div className="flex flex-wrap gap-2 mb-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <button
+                      onClick={toggleAutoPlay}
+                      title={autoPlay
+                        ? 'Spanish in replies is read aloud automatically'
+                        : 'Read the Spanish in each reply aloud automatically'}
+                      aria-pressed={autoPlay}
+                      className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                        autoPlay
+                          ? 'bg-purple-500/30 text-purple-100 border border-purple-400/50'
+                          : 'bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white'
+                      }`}
+                    >
+                      {autoPlay ? '🔊 Auto-play on' : '🔈 Auto-play'}
+                    </button>
                     {chips.map(c => (
                       <button key={c.label} onClick={c.action} disabled={busy}
                         className="px-3 py-1 text-xs rounded-full bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white transition-colors disabled:opacity-50">
@@ -739,6 +864,11 @@ export default function TutorPage() {
                       </button>
                     ))}
                   </div>
+                )}
+                {recording && (
+                  <p className="text-xs text-purple-300 mb-2">
+                    Listening… just stop talking and it&apos;ll send itself.
+                  </p>
                 )}
                 <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex space-x-3">
                   <textarea
