@@ -48,15 +48,31 @@ export async function POST(request: NextRequest) {
       messages.push({ role: 'user', content: "(The student has just opened the placement interview. Greet them and ask your first question.)" });
     }
 
-    const reply = await callOpenRouterChat(messages, { temperature: 0.4, json: true, log: logCtx });
+    const reply = await callOpenRouterChat(messages, {
+      temperature: 0.4, json: true, log: logCtx,
+      maxTokens: 4000, reasoningEffort: 'low', retryEmpty: 2,
+    });
 
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(reply.replace(/^```(json)?|```$/g, '').trim()) || {};
     } catch {
-      // Model broke the contract — fall back to showing the raw text so the
-      // interview can continue rather than dead-ending.
-      return NextResponse.json({ done: false, message: reply, notes: '', task: 0 });
+      // Never paste raw model output into the interview. Showing a broken or
+      // empty reply put an empty turn into the history, which made the model
+      // lose its place and re-ask the same question.
+      console.error('Placement contract broken; raw reply:', reply.slice(0, 400));
+      return NextResponse.json({
+        error: 'retry',
+        message: "Sorry — that didn't come through. Could you send that again?",
+      }, { status: 503 });
+    }
+
+    if (!String(parsed.message || '').trim() && parsed.done !== true) {
+      console.error('Placement returned no message; raw reply:', reply.slice(0, 400));
+      return NextResponse.json({
+        error: 'retry',
+        message: "Sorry — that didn't come through. Could you send that again?",
+      }, { status: 503 });
     }
 
     // Guard the task floor in code, not just in the prompt. Don't trust the model's
@@ -70,7 +86,7 @@ export async function POST(request: NextRequest) {
           { role: 'assistant', content: reply },
           { role: 'user', content: `(System: the student has only produced ${taskCount} Spanish answers; the minimum before you may finish is ${MIN_TASKS}. Do NOT finish yet — ask the next task at the appropriate rung, climbing if they are handling it. Reply with the normal in-progress JSON.)` },
         ],
-        { temperature: 0.4, json: true, log: logCtx }
+        { temperature: 0.4, json: true, log: logCtx, maxTokens: 4000, reasoningEffort: 'low', retryEmpty: 2 }
       );
       try {
         const cont = JSON.parse(nudge.replace(/^```(json)?|```$/g, '').trim());

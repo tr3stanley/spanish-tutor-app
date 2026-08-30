@@ -273,6 +273,11 @@ export default function TutorPage() {
         body: JSON.stringify({ history: [] }),
       });
       const data = await res.json();
+      if (!res.ok || !String(data.message || '').trim()) {
+        setPlacementMode(false);
+        alert("Couldn't start the interview just now — please try again.");
+        return;
+      }
       const opening = [{ id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, at: new Date().toISOString() }];
       setMessages(opening);
       savePlacement(opening);
@@ -301,6 +306,17 @@ export default function TutorPage() {
           body: JSON.stringify({ history }),
         });
         const data = await res.json();
+
+        // A failed turn must not enter the history: an empty assistant message
+        // made the interviewer lose its place and re-ask the same question.
+        // Roll the student's message back so they can simply resend.
+        if (!res.ok || data.error === 'retry' || (!data.done && !String(data.message || '').trim())) {
+          setMessages(messages);
+          setInput(text);
+          alert(data.message || "That didn't come through — please try sending it again.");
+          return;
+        }
+
         const withReply = [...nextMessages, { id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, at: new Date().toISOString() }];
         setMessages(withReply);
         if (data.done) {
@@ -751,7 +767,7 @@ export default function TutorPage() {
                         </span>
                       </button>
                       {openLesson === l.id && (
-                        <div className="p-4 border-t border-white/10 text-sm text-gray-200 leading-relaxed">
+                        <div className="p-4 border-t border-white/10 text-sm text-gray-200 leading-relaxed break-words">
                           {renderRich(l.content)}
                         </div>
                       )}
@@ -799,7 +815,7 @@ export default function TutorPage() {
                                   {explaining === g.category ? 'Updating…' : 'Refresh'}
                                 </button>
                               </div>
-                              <div className="text-sm text-gray-200 leading-relaxed">{renderRich(g.explainer.explanation)}</div>
+                              <div className="text-sm text-gray-200 leading-relaxed break-words">{renderRich(g.explainer.explanation)}</div>
                             </div>
                           ) : (
                             <button onClick={() => explainCategory(g.category)} disabled={explaining === g.category}
@@ -840,7 +856,7 @@ export default function TutorPage() {
                         </div>
                       )}
                       <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                        <div className={`max-w-[85%] min-w-0 break-words rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                           m.role === 'user'
                             ? 'bg-gradient-to-r from-purple-500/40 to-blue-500/40 text-white'
                             : m.kind === 'lesson'

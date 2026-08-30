@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth, unauthorized } from '@/lib/auth';
 
+// Just the playback position and flags — the player used to refetch the whole
+// episode payload (full transcript included) to read these two numbers.
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const auth = await getAuth(request);
+    if (!auth) return unauthorized();
+
+    const { data } = await auth.supabase
+      .from('user_episodes')
+      .select('position_seconds, liked, listened')
+      .eq('episode_id', parseInt(id))
+      .maybeSingle();
+
+    return NextResponse.json(data || { position_seconds: 0, liked: false, listened: false });
+  } catch (error) {
+    console.error('Progress fetch error:', error);
+    return NextResponse.json({ position_seconds: 0, liked: false, listened: false });
+  }
+}
+
 // Playback position, liked flag and listened flag for one episode.
 // Called every 15s while playing, so it stays a single cheap upsert.
 export async function POST(

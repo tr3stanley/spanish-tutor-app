@@ -134,6 +134,13 @@ export async function callOpenRouterChat(
     maxTokens?: number;
     json?: boolean;
     log?: UsageContext;
+    // gpt-oss-120b reasons before answering; 'low' cuts that ~90% and makes
+    // strict-JSON replies far less likely to run past the token ceiling.
+    reasoningEffort?: 'low' | 'medium' | 'high';
+    // Empty/truncated responses happen intermittently on every model tested,
+    // so anything with a strict output contract should retry rather than
+    // hand the caller nothing.
+    retryEmpty?: number;
   } = {}
 ): Promise<string> {
   const model = options.model || ROLE_MODELS[options.role || 'chat'];
@@ -147,38 +154,56 @@ export async function callOpenRouterChat(
     temperature: options.temperature ?? 0.7,
     max_tokens: maxTokens,
     ...(options.json ? { response_format: { type: 'json_object' } } : {}),
+    ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
   });
 
-  const groqKey = process.env.GROQ_API_KEY;
-  // Groq first for latency; it rate-limits, so any failure falls through.
-  if (groqKey && GROQ_MODELS.has(model)) {
-    try {
-      const res = await postJson('https://api.groq.com/openai/v1/chat/completions', groqKey, payload, 1);
-      if (res.ok) {
-        const data: OpenRouterResponse = await res.json();
-        const text = data.choices[0]?.message?.content || '';
-        if (text) {
-          await logUsage(options.log, model, 'groq', options.role || 'chat', data.usage);
-          return text;
+  const attempts = 1 + Math.max(0, options.retryEmpty ?? 0);
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const groqKey = process.env.GROQ_API_KEY;
+    // Groq first for latency; its free tier is 8k tokens/minute, so it will
+    // often be rate-limited and fall through to OpenRouter. That is expected.
+    if (groqKey && GROQ_MODELS.has(model)) {
+      try {
+        const res = await postJson('https://api.groq.com/openai/v1/chat/completions', groqKey, payload, 1);
+        if (res.ok) {
+          const data: OpenRouterResponse = await res.json();
+          const text = data.choices[0]?.message?.content || '';
+          if (text.trim()) {
+            await logUsage(options.log, model, 'groq', options.role || 'chat', data.usage);
+            return text;
+          }
         }
+      } catch (e) {
+        lastError = e;
       }
-      console.log(`Groq unavailable for ${model} (${res.status}); using OpenRouter`);
-    } catch (e) {
-      console.log('Groq request failed, using OpenRouter:', e);
     }
+
+    try {
+      const response = await postJson(
+        'https://openrouter.ai/api/v1/chat/completions',
+        process.env.OPENROUTER_API_KEY || '',
+        payload
+      );
+      if (response.ok) {
+        const data: OpenRouterResponse = await response.json();
+        const text = data.choices[0]?.message?.content || '';
+        await logUsage(options.log, model, 'openrouter', options.role || 'chat', data.usage);
+        if (text.trim()) return text;
+        console.log(`Empty response from ${model} (attempt ${attempt}/${attempts})`);
+      } else {
+        lastError = new Error(`Model API error (${model}): ${response.status} ${response.statusText}`);
+      }
+    } catch (e) {
+      lastError = e;
+    }
+
+    if (attempt < attempts) await new Promise(r => setTimeout(r, 400 * attempt));
   }
 
-  const response = await postJson(
-    'https://openrouter.ai/api/v1/chat/completions',
-    process.env.OPENROUTER_API_KEY || '',
-    payload
-  );
-  if (!response.ok) {
-    throw new Error(`Model API error (${model}): ${response.status} ${response.statusText}`);
-  }
-  const data: OpenRouterResponse = await response.json();
-  await logUsage(options.log, model, 'openrouter', options.role || 'chat', data.usage);
-  return data.choices[0]?.message?.content || '';
+  if (lastError) throw lastError;
+  return '';
 }
 
 export async function callOpenRouter(

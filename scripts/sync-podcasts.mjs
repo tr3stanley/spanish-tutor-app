@@ -18,7 +18,7 @@ import { readFileSync } from 'fs';
 import { mkdir, readFile, stat, unlink, writeFile } from 'fs/promises';
 import { execFile } from 'child_process';
 import path from 'path';
-import { decodeEntities } from './lib/pipeline.mjs';
+import { decodeEntities, classify } from './lib/pipeline.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const env = readFileSync(path.join(ROOT, '.env.local'), 'utf8');
@@ -322,6 +322,19 @@ async function main() {
           segments.map(s => ({ episode_id: ep.id, text: s.text, start_time: s.start, end_time: s.end, confidence: 0.9 }))
         );
         if (segError) throw new Error(segError.message);
+
+        // Classify from the actual transcript. The show's configured level is a
+        // hint for discovery, not a measurement — trusting it put native-speed
+        // A2 podcasts in front of absolute beginners.
+        const tags = await classify(it.title, segments.map(s => s.text).join(' '));
+        if (tags.cefr_level) {
+          await supabase.from('episodes')
+            .update({ cefr_level: tags.cefr_level, topic: tags.topic, dialect: tags.dialect || show.dialect })
+            .eq('id', ep.id);
+          if (tags.cefr_level !== show.level) {
+            console.log(`    level: ${tags.cefr_level} (show config said ${show.level})`);
+          }
+        }
 
         const lesson = await generateLesson(segments.map(s => s.text).join(' '));
         const { error: lessonError } = await supabase.from('lessons').insert({ episode_id: ep.id, ...lesson });

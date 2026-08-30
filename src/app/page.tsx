@@ -53,6 +53,7 @@ export default function Home() {
   const [dialectFilter, setDialectFilter] = useState('all');
   const [showLevelHelp, setShowLevelHelp] = useState(false);
   const [likedOnly, setLikedOnly] = useState(false);
+  const [showBeginner, setShowBeginner] = useState(true);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchHit[] | null>(null);
@@ -104,6 +105,12 @@ export default function Home() {
   };
 
   // Started but not finished — the row that makes a 40-minute episode survivable.
+  // True beginner shelf: genuinely A1 material, unlistened first so it keeps moving.
+  const beginnerPicks = podcasts
+    .filter(p => p.cefr_level === 'A1')
+    .sort((a, b) => Number(a.listened) - Number(b.listened) || a.title.localeCompare(b.title, undefined, { numeric: true }))
+    .slice(0, 6);
+
   const continueListening = podcasts
     .filter(p => (p.position_seconds ?? 0) > 30 && !p.listened)
     .sort((a, b) => (b.position_seconds ?? 0) - (a.position_seconds ?? 0))
@@ -301,6 +308,35 @@ export default function Home() {
                     </div>
                     <p className="text-xs text-gray-300 mt-1 search-snippet"
                       dangerouslySetInnerHTML={{ __html: r.snippet }} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!results && showBeginner && beginnerPicks.length > 0 && (
+            <div className="px-6 pb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-200">Start here</h3>
+                  <p className="text-xs text-gray-400">
+                    Short, slow and written for absolute beginners. Everything else in the library is faster than this.
+                  </p>
+                </div>
+                <button onClick={() => setShowBeginner(false)}
+                  className="text-xs text-gray-500 hover:text-gray-300 whitespace-nowrap ml-3">
+                  Hide
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {beginnerPicks.map(p => (
+                  <Link key={p.id} href={`/podcast/${p.id}`}
+                    className="block p-3 rounded-lg bg-green-400/10 border border-green-400/25 hover:bg-green-400/20 transition-colors">
+                    <div className="text-sm text-white truncate">{p.title.replace(/^Historia:\s*/, '')}</div>
+                    <div className="text-[11px] text-green-300 mt-1">
+                      {p.cefr_level} · {p.duration ? `${Math.round(p.duration / 60) || 1} min` : 'short'}
+                      {p.listened && ' · ✓ listened'}
+                    </div>
                   </Link>
                 ))}
               </div>

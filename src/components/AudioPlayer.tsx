@@ -171,11 +171,11 @@ export default function AudioPlayer({
     savedPositionRef.current = null;
     (async () => {
       try {
-        const res = await fetch(`/api/podcasts/${podcastId}`);
+        const res = await fetch(`/api/podcasts/${podcastId}/progress`);
         const data = await res.json();
         if (cancelled) return;
-        setLiked(!!data.progress?.liked);
-        const pos = Number(data.progress?.position_seconds || 0);
+        setLiked(!!data.liked);
+        const pos = Number(data.position_seconds || 0);
         // Ignore a position at the very end — that's a finished episode, not a bookmark.
         if (pos > 10) {
           savedPositionRef.current = pos;
@@ -478,12 +478,32 @@ export default function AudioPlayer({
     }
   };
 
+  const nearestSegment = () => {
+    if (!transcript || transcript.length === 0) return null;
+    let best = transcript[0];
+    let bestGap = Infinity;
+    for (const seg of transcript) {
+      const gap = currentTime < seg.start_time
+        ? seg.start_time - currentTime
+        : (currentTime > seg.end_time ? currentTime - seg.end_time : 0);
+      if (gap < bestGap) { bestGap = gap; best = seg; }
+    }
+    return bestGap <= 30 ? best : null;
+  };
+
   const handleTranslateCurrentSegment = async () => {
-    const currentSegment = getCurrentSegment();
-    if (!currentSegment) return;
+    // Whisper leaves gaps between segments, so exact-time lookup often finds
+    // nothing. Fall back to the nearest line rather than silently doing nothing.
+    const currentSegment = getCurrentSegment() || nearestSegment();
+    if (!currentSegment) {
+      setTranslation('No transcript line to translate at this point in the episode.');
+      setShowTranslation(true);
+      return;
+    }
 
     setIsTranslating(true);
-    setShowTranslation(false);
+    // Keep any previous translation on screen until the new one arrives —
+    // clearing it made the panel collapse and re-expand on every use.
 
     try {
       const response = await fetch(`/api/podcasts/${podcastId}/translate`, {
@@ -662,43 +682,8 @@ export default function AudioPlayer({
         </div>
       )}
 
-      {/* AI Explanation Display */}
-      {showExplanation && (
-        <div className="mb-4 p-4 bg-green-400/10 rounded-lg border-l-4 border-green-400">
-          <div className="flex justify-between items-start mb-2">
-            <h4 className="font-medium text-green-300">AI Explanation</h4>
-            <button
-              onClick={() => setShowExplanation(false)}
-              className="text-green-300 hover:text-green-100"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="text-sm text-green-100 whitespace-pre-wrap">{explanation}</div>
-        </div>
-      )}
-
-      {/* Translation Display */}
-      {showTranslation && (
-        <div className="mb-4 p-4 bg-purple-400/10 rounded-lg border-l-4 border-purple-400">
-          <div className="flex justify-between items-start mb-2">
-            <h4 className="font-medium text-purple-300">Translation</h4>
-            <button
-              onClick={() => setShowTranslation(false)}
-              className="text-purple-300 hover:text-purple-100"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="text-sm text-purple-100 whitespace-pre-wrap">{translation}</div>
-        </div>
-      )}
-
-      {/* Player Controls */}
+      {/* Player Controls — kept ABOVE the explanation/translation panels so
+          those can appear and disappear without displacing the scrub bar. */}
       <div className="space-y-4">
         {/* Progress Bar — pointer-driven so it drags properly on touch.
             The hit area is padded well beyond the visible track. */}
@@ -862,6 +847,42 @@ export default function AudioPlayer({
           </div>
         </div>
       </div>
+      {/* AI Explanation Display */}
+      {showExplanation && (
+        <div className="mb-4 p-4 bg-green-400/10 rounded-lg border-l-4 border-green-400">
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-medium text-green-300">AI Explanation</h4>
+            <button
+              onClick={() => setShowExplanation(false)}
+              className="text-green-300 hover:text-green-100"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="text-sm text-green-100 whitespace-pre-wrap">{explanation}</div>
+        </div>
+      )}
+
+      {/* Translation Display */}
+      {showTranslation && (
+        <div className="mb-4 p-4 bg-purple-400/10 rounded-lg border-l-4 border-purple-400">
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-medium text-purple-300">Translation</h4>
+            <button
+              onClick={() => setShowTranslation(false)}
+              className="text-purple-300 hover:text-purple-100"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="text-sm text-purple-100 whitespace-pre-wrap">{translation}</div>
+        </div>
+      )}
     </div>
+
   );
 }
