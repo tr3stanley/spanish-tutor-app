@@ -33,14 +33,17 @@ const PIPELINE_PASSWORD = get('PIPELINE_PASSWORD');
 
 // Curated shows chosen to fill the library's level gaps (A1/A2 and B2+).
 const SHOWS = [
-  { search: 'Chill Spanish Listening Practice', level: 'A1', dialect: 'neutral_latam', folder: 'Chill Spanish (A1-A2)' },
-  { search: 'Cuentame Spanish Comprehensible Input', level: 'A2', dialect: 'neutral_latam', folder: 'Cuéntame (A2)' },
-  { search: 'Simple Stories in Spanish', level: 'A2', dialect: 'neutral_latam', folder: 'Simple Stories in Spanish (A2)' },
-  { search: 'Duolingo Spanish Podcast', level: 'B1', dialect: 'neutral_latam', folder: 'Duolingo Podcast (B1)' },
-  { search: 'Espanol con Juan', level: 'B2', dialect: 'castilian', folder: 'Español con Juan (B1-B2)' },
-  { search: 'Hoy Hablamos', level: 'B1', dialect: 'castilian', folder: 'Hoy Hablamos (B1-B2)' },
-  { search: 'No Hay Tos', level: 'B2', dialect: 'mexican', folder: 'No Hay Tos (B2)' },
-  { search: 'Radio Ambulante', level: 'C1', dialect: 'neutral_latam', folder: 'Radio Ambulante (C1)' },
+  // `level` is only a fallback if classification fails — never a label. Folder
+  // names carry no level: the library derives that badge from the episodes,
+  // because a written-in level goes stale (7 of 8 of these had drifted).
+  { search: 'Chill Spanish Listening Practice', level: 'A2', dialect: 'neutral_latam', folder: 'Chill Spanish' },
+  { search: 'Cuentame Spanish Comprehensible Input', level: 'A2', dialect: 'neutral_latam', folder: 'Cuéntame' },
+  { search: 'Simple Stories in Spanish', level: 'A2', dialect: 'neutral_latam', folder: 'Simple Stories in Spanish' },
+  { search: 'Duolingo Spanish Podcast', level: 'B1', dialect: 'neutral_latam', folder: 'Duolingo Podcast' },
+  { search: 'Espanol con Juan', level: 'B2', dialect: 'castilian', folder: 'Español con Juan' },
+  { search: 'Hoy Hablamos', level: 'B1', dialect: 'castilian', folder: 'Hoy Hablamos' },
+  { search: 'No Hay Tos', level: 'B2', dialect: 'mexican', folder: 'No Hay Tos' },
+  { search: 'Radio Ambulante', level: 'C1', dialect: 'neutral_latam', folder: 'Radio Ambulante' },
 ];
 
 const args = process.argv.slice(2);

@@ -5,6 +5,19 @@ import { useState, useEffect } from 'react';
 import ScrollingTitle from './ScrollingTitle';
 import { levelInfo } from '@/lib/levels';
 
+const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+// The folder badge is computed from the episodes actually inside it. Folder
+// names used to carry a hand-written level and 7 of 8 had drifted out of date.
+function levelRange(items: { cefr_level?: string }[]): { low: string; label: string } | null {
+  const levels = [...new Set(items.map(i => i.cefr_level).filter((l): l is string => !!l))]
+    .sort((a, b) => CEFR_ORDER.indexOf(a) - CEFR_ORDER.indexOf(b));
+  if (levels.length === 0) return null;
+  const low = levels[0];
+  const high = levels[levels.length - 1];
+  return { low, label: low === high ? low : `${low}–${high}` };
+}
+
 interface Podcast {
   id: number;
   title: string;
@@ -260,6 +273,19 @@ export default function FolderPodcastList({ podcasts, onPodcastDeleted }: Folder
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z" />
                   </svg>
                   <h3 className="text-lg font-semibold text-white">{folder.name}</h3>
+                  {(() => {
+                    const range = levelRange(folderPodcasts);
+                    if (!range) return null;
+                    const info = levelInfo(range.low);
+                    return (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${info?.badgeClass || 'bg-white/10 text-gray-300'}`}
+                        title={info?.listening || ''}
+                      >
+                        {range.label}
+                      </span>
+                    );
+                  })()}
                   <span className="bg-white/10 text-gray-300 px-2 py-1 rounded-full text-sm">
                     {folderPodcasts.length}
                   </span>
