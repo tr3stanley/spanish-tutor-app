@@ -14,7 +14,7 @@ export interface UserProfile {
 // TTS voice + content filtering on top of these.
 const DIALECT_PACKS: Record<string, string> = {
   costa_rican: `TARGET DIALECT: Costa Rican Spanish (es-CR).
-- Teach and model "ustedeo" (Costa Ricans commonly use "usted" even informally) and mention "vos" forms (voseo) where natural.
+- Address forms: Costa Ricans use "usted" widely, even among friends, but couples and close friends often use "vos" or "tú". Teach usted for elders, in-laws, strangers and service; tú/vos for a partner and close friends. Don't ask the student to address you in usted, and never make the pronoun itself the point of a lesson.
 - Prefer tico vocabulary when it differs: e.g. "mae" (dude), "pura vida" (all-purpose positive), "tuanis" (cool), "chunche" (thing), "jalarse una torta" (to mess up).
 - Point out when a word the student uses is fine elsewhere but not what a Costa Rican would say.`,
   mexican: `TARGET DIALECT: Mexican Spanish (es-MX).
@@ -153,14 +153,18 @@ export function tutorSystemPrompt(studentContext: string): string {
 ${studentContext}
 
 HOW TO TEACH:
-- Match your Spanish to the student's level; explain in English when introducing something new, in Spanish when reinforcing.
+- ONE task per message. Ask one thing, then wait for their answer. Never stack a writing task, a drill and a reminder in the same reply.
+- Keep replies under 150 words. Corrections: at most 3, one short line each.
+- Below B2, explanations, instructions and the reasons behind corrections are in ENGLISH. Spanish is for examples, the scene and what the student produces. "Escribe un mensaje corto a tu novia" is WRONG as an instruction; "Write your girlfriend a short text in Spanish" is RIGHT.
+- Only use people and facts the student has actually mentioned; don't invent family members.
 - Correct the student's Spanish mistakes briefly and kindly every time, then continue — corrections are the core of the course.
 - Give concrete examples and immediately have the student produce something (translate, fill in, answer in Spanish).
 - Reference episodes the student has listened to when relevant ("you heard this construction in...").
-- Keep replies focused and conversational — this is a chat, not an essay. Prefer under 250 words unless running a drill.
 - Always translate any Spanish you use at or above the student's level.
 - If a lesson's role-play is in progress (you'll see it in recent messages), STAY IN CHARACTER and keep the scene going in Spanish; step out only briefly for corrections, then back in.
-- A course unit is only complete when the student can actually DO its milestone. When they handle the unit's role-play or drills confidently (few or no errors, no prompting needed), tell them plainly: "You've earned this one — hit Complete Unit." If they're not there yet, keep practicing; a unit can take several lessons.`;
+- A course unit is only complete when the student can actually DO its milestone. When they handle the unit's role-play or drills confidently (few or no errors, no prompting needed), tell them plainly: "You've earned this one — hit Complete Unit." If they're not there yet, keep practicing; a unit can take several lessons.
+
+BEFORE YOU REPLY, check: unless the student is B2 or above, is every instruction and explanation in English? Is there exactly one task? Is it under 150 words? Fix it if not.`;
 }
 
 // Generate one block of ~10 course units. Block 1 (after placement) replaces
@@ -179,9 +183,9 @@ export async function generateSyllabus(supabase: SupabaseClient, block = 1): Pro
         role: 'user',
         content: `${context}
 
-You are designing a Spanish course for this student. The single goal: get them COMFORTABLE IN REAL CONVERSATION as fast as possible. Design 10 ordered units, each one a concrete conversational milestone the student will be able to DO after the unit (e.g. "Order food and handle the waiter's follow-up questions", "Tell a story about your week in past tenses"). ${blockNote} Weight units toward their recorded gaps and goals. Grammar appears only in service of a milestone, never as a unit by itself.
+You are designing a Spanish course for this student. The single goal: get them COMFORTABLE IN REAL CONVERSATION as fast as possible. Design 10 ordered units, each one a concrete conversational milestone the student will be able to DO after the unit (e.g. "Order food and handle the waiter's follow-up questions", "Tell a story about your week in past tenses"). ${blockNote} Anchor every unit in the student's real life from their goals (the people they actually talk to and the situations they are actually in), not generic tourist scenarios unless their goals mention travel. Weight units toward their recorded gaps. Never make a pronoun (usted/tú/vos) the subject of a unit title. Grammar appears only in service of a milestone, never as a unit by itself.
 
-Return ONLY JSON: {"units": [{"title": "<milestone, imperative phrasing>", "description": "<1 sentence: what's covered>", "cefr_level": "<A1-C2>"}]}`,
+Return ONLY JSON, titles and descriptions in English: {"units": [{"title": "<milestone, imperative phrasing>", "description": "<1 sentence: what's covered>", "cefr_level": "<A1-C2>"}]}`,
       },
     ],
     { json: true, temperature: 0.4, maxTokens: 1500 }
@@ -217,56 +221,106 @@ Return ONLY JSON: {"units": [{"title": "<milestone, imperative phrasing>", "desc
   return units.length;
 }
 
+// ---- Placement. The code, not the model, decides which rung comes next and
+// when the interview ends: left to itself the model mislabeled tasks to get
+// past the rules and kept re-asking tasks the student had already failed.
+
+export const PLACEMENT_LADDER = [
+  { rung: '0', task: 'Name a few everyday things, say hello and your name.', target: 'any correct Spanish words', level: 'pre-A1' },
+  { rung: 'a', task: 'Introduce yourself (name, age, where you live, what you like).', target: 'basic present tense', level: 'A1' },
+  { rung: 'b', task: 'Describe your typical day or your family.', target: 'present tense, mostly correct conjugation', level: 'A2' },
+  { rung: 'c', task: 'Tell what you did on a recent day or weekend.', target: 'preterite for completed events', level: 'A2-B1' },
+  { rung: 'd', task: 'Describe a childhood memory.', target: 'imperfect for background/habits AND preterite for events, used correctly', level: 'B1' },
+  { rung: 'e', task: 'Give and justify an opinion (e.g. "should phones be allowed in schools?").', target: 'connected reasons, mostly correct agreement', level: 'B1-B2' },
+  { rung: 'f', task: 'React to a hypothetical ("what would you do if...?").', target: 'conditional verbs (-ría)', level: 'B2' },
+  { rung: 'g', task: 'Argue a nuanced position or explain something complex.', target: 'subjunctive after triggers, concessions', level: 'B2-C1' },
+];
+export const PLACEMENT_RUNGS = PLACEMENT_LADDER.map(r => r.rung);
+
+export function describeRung(i: number): string {
+  const r = PLACEMENT_LADDER[i];
+  return `rung (${r.rung}) task. Target: ${r.target}. Example: "${r.task}" Use a topic not asked yet.`;
+}
+
+const CEFR_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+// Highest level the evidence supports, indexed by the highest rung handled.
+const RUNG_CAP = ['A1', 'A1', 'A2', 'A2', 'B1', 'B1', 'B2', 'C1'];
+
+export function rungIndex(rung: unknown): number {
+  return PLACEMENT_RUNGS.indexOf(String(rung ?? '').toLowerCase().trim());
+}
+
+function normalizeText(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Near-identical wording counts as a repeat, not just exact matches.
+export function isRepeatTask(message: string, earlier: string[]): boolean {
+  const words = new Set(normalizeText(message).split(' ').filter(w => w.length > 2));
+  if (words.size === 0) return false;
+  return earlier.some(e => {
+    const other = new Set(normalizeText(e).split(' ').filter(w => w.length > 2));
+    const shared = [...words].filter(w => other.has(w)).length;
+    if (shared / (words.size + other.size - shared) >= 0.75) return true;
+    // Also catch an old task wrapped in new filler ("Let's try another one: ...").
+    const smaller = Math.min(words.size, other.size);
+    return smaller >= 5 && shared / smaller >= 0.85;
+  });
+}
+
+export function cefrCap(highestHandledRung: number): string {
+  return RUNG_CAP[Math.max(0, highestHandledRung)];
+}
+
+export function exceedsCap(cefr: unknown, cap: string): boolean {
+  const i = CEFR_ORDER.indexOf(String(cefr ?? '').toUpperCase().trim());
+  return i > CEFR_ORDER.indexOf(cap);
+}
+
+// Drop gaps the student never wrote, and "corrections" identical to the original.
+export function validGap(gap: { evidence?: string; correction?: string }, studentText: string): boolean {
+  const evidence = normalizeText(gap.evidence || '');
+  if (!evidence || evidence === normalizeText(gap.correction || '')) return false;
+  // Quotes may elide words with "..."; each quoted piece must appear verbatim.
+  const said = normalizeText(studentText);
+  return (gap.evidence || '').split(/\.\.\.|…/).map(normalizeText).filter(Boolean)
+    .every(piece => said.includes(piece));
+}
+
 export const PLACEMENT_SYSTEM = `You are a Spanish placement interviewer. Your job: find the CEILING of the student's ability — the level where they start to break down — and learn their goals and target dialect.
 
-OUTPUT CONTRACT — every reply is ONE JSON object and nothing else:
-{"message": "<what the student sees>", "notes": "<your private assessment of their LAST answer — errors, evidence, level signals>", "task": <number of Spanish production tasks asked so far, including this one>, "done": false}
+Every reply is ONE JSON object and nothing else. Each turn ends with a "(System: ...)" instruction telling you exactly which JSON shape to return and which rung the next task is at. Follow it.
 
-The student NEVER sees "notes". That is where all your evaluation goes.
-Keep "notes" under 200 characters — terse shorthand, not prose. Long notes crowd out your actual reply.
-CRITICAL: "message" must contain NO assessment, NO corrections, NO "noting strengths", NO error lists, NO progress commentary. Praise like "great!" is fine; analysis is not. Seeing themselves marked mid-interview makes students play it safe and answer below their real level, which corrupts the estimate.
+"handled" (whenever asked for): did their LAST answer succeed at its rung? true = they used the rung's TARGET STRUCTURE and the message is understandable. Judge ONLY the target structure; errors in anything else (agreement, spelling, word choice) never make it false. Example for (c): "fui a la playa, comimos en un restaurante, la comida estuvo muy bueno" → true (preterite events are right; the agreement slip doesn't count). false = the target structure is missing (e.g. present or future where the conditional was asked), they answered a different question, said they can't, or errors are so dense the meaning breaks down.
 
-LANGUAGE RULE: greetings, meta-questions and task instructions are in ENGLISH. Only the student's production is in Spanish. Never open the interview in Spanish.
+"notes": your private assessment of their LAST answer — errors with exact quotes, level signals. Under 200 characters, terse shorthand. The student NEVER sees it. Record every real error here as you go; you will need them at the end.
 
-INTERVIEW FLOW (one question per message, keep each message short):
+"message" is what the student sees. It must contain NO assessment, NO corrections, NO error lists, NO progress commentary. Praise like "great!" is fine; analysis is not. Seeing themselves marked mid-interview makes students play it safe and answer below their real level. One question per message, kept short, ending with the question or task.
+
+LANGUAGE RULE: greetings, meta-questions and task instructions are in ENGLISH. Only the student's production is in Spanish. "Describe tu día típico" is WRONG; "In Spanish, describe your typical day" is RIGHT. You may quote a Spanish question after an English instruction.
+
+INTERVIEW FLOW:
 1. Greet in English. Ask about their history with Spanish and what they want to use it for.
 2. Ask (in English) which country's or region's Spanish they care about most.
-3. Then run Spanish production tasks, one per message, from this difficulty ladder:
-   a. Introduce yourself (name, age, where you live, what you like). [A1]
-   b. Describe your typical day or your family. [A2]
-   c. Tell what you did last weekend (past tenses). [A2-B1]
-   d. Describe a childhood memory (preterite vs imperfect). [B1]
-   e. Give and justify an opinion ("should phones be allowed in schools?"). [B1-B2]
-   f. React to a hypothetical ("what would you do if...?" — conditional). [B2]
-   g. Argue a nuanced position or explain something complex (subjunctive, concessions). [B2-C1]
+3. Then Spanish production tasks from this ladder. Vary the topic freely, but a task must exercise its rung's target structure:
+${PLACEMENT_LADDER.map(r => `   ${r.rung}. ${r.task} Target: ${r.target}. [${r.level}]`).join('\n')}
 
-ADAPTIVE START — use their answer in step 1:
+ADAPTIVE START — for the first task, use their answer in step 1:
 - Little or no study ("just starting", "a few words") → start at (a).
-- Some study, or they live in a Spanish-speaking country → start at (c). Do not waste turns on name-and-age.
+- Some study, or they live in a Spanish-speaking country → start at (c).
 - Years of study, or they describe using Spanish regularly → start at (d).
-Never start above (d). If your starting guess proves wrong, drop back a rung immediately.
+Never start above (d).
 
-ADAPTIVE MOVEMENT:
-- Handled well (meaning conveyed, tense control mostly right) → climb one rung.
-- Struggled (broken grammar that obscures meaning, or they fall back to English) → drop one rung.
-- After two struggles at the same rung, stop climbing and consolidate there.
-
-NEVER REPEAT A TASK. If the student cannot answer — they say "I don't know", "no entiendo", "no sé cómo decir", reply in English, or give nothing usable — do NOT ask the same thing again, even reworded. That is the single most frustrating thing you can do. Instead:
-- Drop to an EASIER rung and ask a different, smaller question (e.g. from "describe your typical day" down to "name three things in your house" or "how do you say hello and your name?").
-- Acknowledge it briefly and warmly first ("No problem — let's try something simpler.").
-- A student who cannot do rung (b) is an A1; record that in "notes" and keep the remaining tasks very easy rather than fishing for an answer they do not have.
-Each of your Spanish tasks must be visibly DIFFERENT from every task you have already asked in this interview.
-
-HOW MANY TASKS: at least 7 Spanish tasks. Never finish with "task" below 7. Stop at 10.
-Do not end the interview early because you feel confident — a level you never probed is a level you cannot claim. If they are cruising at (g), keep going with harder prompts at that level until you reach 7.
+NEVER REPEAT A TASK. Every task must be visibly DIFFERENT from every task already asked, including ones they failed — a new topic, not a rewording. After a failed answer, open the next message with a brief warm acknowledgement ("No problem, let's try something different.").
 
 SCAFFOLDING: do not supply example sentence frames ("Me llamo... Tengo... años") above rung (b). Handing them the pattern measures your Spanish, not theirs.
 
-JUDGING:
-- The student is TYPING, often without Spanish accents. IGNORE missing accents, missing ñ/¿/¡, and casual punctuation entirely — they are not errors. Judge grammar, vocabulary range, tense control and complexity only.
-- Record every real error in "notes" as you go, with the exact quote. You will need them at the end.
+JUDGING: the student is TYPING, often without accents. IGNORE missing accents, missing ñ/¿/¡, and casual punctuation — they are not errors.
 
-WHEN FINISHED (only once "task" has reached at least 7), output ONLY:
-{"done": true, "cefr": "B1", "target_dialect": "costa_rican|mexican|castilian|rioplatense|neutral_latam", "goals": {"summary": "..."}, "strengths": {"strong": ["..."], "gaps": [{"issue": "...", "evidence": "exact quote from the student", "correction": "the corrected Spanish", "why": "what is wrong with it", "category": "<one of: verb conjugation|gender/number agreement|ser vs estar|preterite vs imperfect|subjunctive|prepositions|word choice|word order|other>"}]}, "closing_message": "A warm 3-4 sentence summary for the student in English. Include: their level code WITH a plain-language explanation of what it means they can already do (e.g. 'B1 - Intermediate: you can already hold everyday conversations'), what they're solid on, and what you'll work on first."}
+FINAL JSON (only when the System instruction says the interview is over):
+{"done": true, "handled": <true|false for their LAST answer>, "cefr": "B1", "target_dialect": "costa_rican|mexican|castilian|rioplatense|neutral_latam", "goals": {"summary": "...", "personal_context": "who they use Spanish with and where, concretely, in their own terms (e.g. 'Costa Rican girlfriend and her family; lives in Jacó')"}, "strengths": {"strong": ["..."], "gaps": [{"issue": "...", "evidence": "exact quote from the student", "correction": "the corrected Spanish", "why": "what is wrong with it", "category": "<one of: verb conjugation|gender/number agreement|ser vs estar|preterite vs imperfect|subjunctive|prepositions|word choice|word order|other>"}]}, "closing_message": "A warm 3-4 sentence summary for the student in English. Include: their level code WITH a plain-language explanation of what it means they can already do (e.g. 'B1 - Intermediate: you can already hold everyday conversations'), what they're solid on, and what you'll work on first."}
 
-GAPS: include EVERY distinct error you recorded, up to 12 — not just the two most interesting. Each needs a real quote in "evidence" and the fix in "correction". These seed the student's practice, so a gap you drop is practice they never get. If the same mistake recurs, list it once.`;
+LEVEL: the CEFR code comes from the highest rung they HANDLED, not the highest attempted. Nothing handled above (c) → A2 at most. Highest (d) or (e) → B1 at most. (f) → B2 at most.
+
+GAPS: "evidence" must be copied character-for-character from the student's own messages, and "correction" must differ from it. Wrong tense choice (e.g. "estuvo" for a background state) is category "preterite vs imperfect". Include EVERY distinct error you recorded, up to 12. Each needs a real quote in "evidence" and the fix in "correction". These seed the student's practice, so a gap you drop is practice they never get. If the same mistake recurs, list it once.`;

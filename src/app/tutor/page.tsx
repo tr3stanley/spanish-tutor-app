@@ -16,6 +16,8 @@ interface Message {
   // Placement only: the interviewer's private assessment. Never rendered —
   // students who see themselves being marked answer below their real level.
   notes?: string;
+  rung?: string | null;
+  handled?: boolean | null;
 }
 
 interface Profile {
@@ -278,7 +280,7 @@ export default function TutorPage() {
         alert("Couldn't start the interview just now — please try again.");
         return;
       }
-      const opening = [{ id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, at: new Date().toISOString() }];
+      const opening = [{ id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, rung: data.rung, handled: data.handled, at: new Date().toISOString() }];
       setMessages(opening);
       savePlacement(opening);
     } catch (e) {
@@ -299,7 +301,7 @@ export default function TutorPage() {
 
     try {
       if (placementMode) {
-        const history = nextMessages.map(m => ({ role: m.role, content: m.content, notes: m.notes }));
+        const history = nextMessages.map(m => ({ role: m.role, content: m.content, notes: m.notes, rung: m.rung, handled: m.handled }));
         const res = await fetch('/api/tutor/placement', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -317,7 +319,7 @@ export default function TutorPage() {
           return;
         }
 
-        const withReply = [...nextMessages, { id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, at: new Date().toISOString() }];
+        const withReply = [...nextMessages, { id: `a-${Date.now()}`, role: 'assistant' as const, content: data.message, notes: data.notes, rung: data.rung, handled: data.handled, at: new Date().toISOString() }];
         setMessages(withReply);
         if (data.done) {
           setPlacementMode(false);
